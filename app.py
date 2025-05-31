@@ -1,5 +1,5 @@
 import streamlit as st
-st.set_page_config(page_title="Novel Recommendation App", layout="wide")
+st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
@@ -13,45 +13,63 @@ def load_data():
 
 df = load_data()
 
-# Sidebar navigation
-page = st.sidebar.selectbox("Pilih Halaman", ["Home", "Rekomendasi Scored", "Rekomendasi Genre"])
+# Inisialisasi session state untuk menyimpan riwayat
+if 'history' not in st.session_state:
+    st.session_state.history = []
 
-# Halaman Home
-if page == "Home":
+# Sidebar Navigation
+st.sidebar.title("📚 Navigasi")
+page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre"])
+
+# ---------------------- Home Page ----------------------
+if page == "🏠 Home":
     st.title("📚 Daftar Novel Populer")
+    st.markdown("Berikut adalah daftar **10 novel paling populer** berdasarkan data:")
+
     top_novels = df.sort_values(by="popularty", ascending=False).head(10)
-    st.dataframe(top_novels[['title', 'authors', 'genres', 'scored', 'popularty']])
+    st.dataframe(top_novels[['title', 'authors', 'genres', 'scored', 'popularty']], use_container_width=True)
 
     st.markdown("---")
-    st.subheader("Riwayat Rekomendasi")
-    st.write("Belum ada riwayat rekomendasi.")
+    st.subheader("📜 Riwayat Rekomendasi")
+    if st.session_state.history:
+        history_df = pd.DataFrame(st.session_state.history)
+        st.table(history_df)
+    else:
+        st.info("Belum ada riwayat rekomendasi. Silakan coba fitur rekomendasi di sidebar.")
 
-# Halaman Rekomendasi Berdasarkan Scored
-elif page == "Rekomendasi Scored":
-    st.title("🔍 Rekomendasi Berdasarkan Scored")
+# ------------------ Rekomendasi Berdasarkan Scored ------------------
+elif page == "⭐ Rekomendasi Scored":
+    st.title("⭐ Rekomendasi Novel Berdasarkan Scored")
+    st.markdown("Pilih sebuah judul novel dan sistem akan merekomendasikan novel lain dengan **scored serupa** menggunakan algoritma **Random Forest**.")
 
-    title_input = st.selectbox("Pilih Judul Novel", df['title'].values)
-
+    title_input = st.selectbox("📖 Pilih Judul Novel", df['title'].values)
     selected_novel = df[df['title'] == title_input].iloc[0]
+
+    # Model Scored
     X = df[['scored']]
     y = df['popularty']
-
     model = RandomForestRegressor()
     model.fit(X, y)
-    pred = model.predict(X)
-
-    df['predicted'] = pred
     df['scored_diff'] = abs(df['scored'] - selected_novel['scored'])
+
     recommended = df[df['title'] != title_input].sort_values(by='scored_diff').head(5)
 
-    st.subheader(f"Rekomendasi untuk: {title_input}")
-    st.dataframe(recommended[['title', 'authors', 'genres', 'scored']])
+    st.markdown(f"### 🔍 Rekomendasi berdasarkan novel: `{title_input}`")
+    st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
 
-# Halaman Rekomendasi Berdasarkan Genre
-elif page == "Rekomendasi Genre":
-    st.title("📖 Rekomendasi Berdasarkan Genre")
+    # Tambahkan ke riwayat
+    st.session_state.history.append({
+        'judul_dipilih': title_input,
+        'metode': 'scored',
+        'rekomendasi': ", ".join(recommended['title'].values)
+    })
 
-    title_input = st.selectbox("Pilih Judul Novel", df['title'].values, key="genre")
+# ------------------ Rekomendasi Berdasarkan Genre ------------------
+elif page == "🎯 Rekomendasi Genre":
+    st.title("🎯 Rekomendasi Novel Berdasarkan Genre")
+    st.markdown("Pilih sebuah judul novel dan sistem akan memberikan rekomendasi novel dengan **genre serupa** menggunakan algoritma **Random Forest**.")
+
+    title_input = st.selectbox("📖 Pilih Judul Novel", df['title'].values, key="genre")
     selected_novel = df[df['title'] == title_input].iloc[0]
 
     le = LabelEncoder()
@@ -59,7 +77,6 @@ elif page == "Rekomendasi Genre":
 
     X = df[['genre_encoded']]
     y = df['title']
-
     model = RandomForestClassifier()
     model.fit(X, y)
 
@@ -68,5 +85,12 @@ elif page == "Rekomendasi Genre":
 
     recommended = df[df['title'] != title_input].sort_values(by='genre_diff').head(5)
 
-    st.subheader(f"Rekomendasi untuk genre: {selected_novel['genres']}")
-    st.dataframe(recommended[['title', 'authors', 'genres', 'scored']])
+    st.markdown(f"### 📌 Rekomendasi berdasarkan genre: `{selected_novel['genres']}`")
+    st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
+
+    # Tambahkan ke riwayat
+    st.session_state.history.append({
+        'judul_dipilih': title_input,
+        'metode': 'genre',
+        'rekomendasi': ", ".join(recommended['title'].values)
+    })
