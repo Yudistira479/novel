@@ -17,6 +17,29 @@ df = load_data()
 if 'history' not in st.session_state:
     st.session_state.history = []
 
+# CSS styling untuk mempercantik
+st.markdown("""
+<style>
+h1, h2, h3, h4 {
+    color: #2E8B57;
+}
+[data-testid="stSidebar"] {
+    background-color: #f0f2f6;
+}
+.stButton>button {
+    color: white;
+    background-color: #2E8B57;
+    border-radius: 10px;
+}
+.stTable {
+    background-color: #ffffff;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Sidebar
 st.sidebar.title("📚 Navigasi")
 page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"])
@@ -33,7 +56,7 @@ if page == "🏠 Home":
     st.subheader("📜 Riwayat Rekomendasi")
     if st.session_state.history:
         for item in st.session_state.history[::-1]:
-            st.markdown(f"### 🔎 Rekomendasi berdasarkan novel: <span style='color:green'><code>{item['judul_dipilih']}</code></span>", unsafe_allow_html=True)
+            st.markdown(f"### 🔎 Rekomendasi berdasarkan: <span style='color:green'><code>{item['judul_dipilih']}</code></span>", unsafe_allow_html=True)
             st.table(item['rekomendasi'])
     else:
         st.info("Belum ada riwayat rekomendasi. Silakan coba fitur rekomendasi di sidebar.")
@@ -41,23 +64,23 @@ if page == "🏠 Home":
 # ------------------ Rekomendasi Berdasarkan Scored ------------------
 elif page == "⭐ Rekomendasi Scored":
     st.title("⭐ Rekomendasi Novel Berdasarkan Scored")
-    st.markdown("Pilih sebuah judul novel dan sistem akan merekomendasikan novel lain dengan **scored serupa** menggunakan algoritma **Random Forest**.")
+    st.markdown("Masukkan skor dan sistem akan merekomendasikan novel dengan **scored serupa** menggunakan algoritma **Random Forest**.")
 
-    title_input = st.selectbox("📖 Pilih Judul Novel", df['title'].values)
-    selected_novel = df[df['title'] == title_input].iloc[0]
+    input_score = st.slider("🎯 Pilih Nilai Skor", min_value=float(df['scored'].min()), max_value=float(df['scored'].max()), value=float(df['scored'].mean()), step=0.01)
 
     X = df[['scored']]
     y = df['popularty']
     model = RandomForestRegressor()
     model.fit(X, y)
-    df['scored_diff'] = abs(df['scored'] - selected_novel['scored'])
-    recommended = df[df['title'] != title_input].sort_values(by='scored_diff').head(5)
 
-    st.markdown(f"### 🔍 Rekomendasi berdasarkan novel: <span style='color:green'><code>{title_input}</code></span>", unsafe_allow_html=True)
+    df['scored_diff'] = abs(df['scored'] - input_score)
+    recommended = df.sort_values(by='scored_diff').head(5)
+
+    st.markdown(f"### 🔍 Rekomendasi berdasarkan skor: <span style='color:green'><code>{input_score:.2f}</code></span>", unsafe_allow_html=True)
     st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
 
     st.session_state.history.append({
-        'judul_dipilih': title_input,
+        'judul_dipilih': f'Scored {input_score:.2f}',
         'metode': 'scored',
         'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
     })
@@ -65,31 +88,34 @@ elif page == "⭐ Rekomendasi Scored":
 # ------------------ Rekomendasi Berdasarkan Genre ------------------
 elif page == "🎯 Rekomendasi Genre":
     st.title("🎯 Rekomendasi Novel Berdasarkan Genre")
-    st.markdown("Pilih sebuah judul novel dan sistem akan memberikan rekomendasi novel dengan **genre serupa** menggunakan algoritma **Random Forest**.")
+    st.markdown("Masukkan genre novel dan sistem akan merekomendasikan novel dengan genre yang sesuai menggunakan algoritma **Random Forest**.")
 
-    title_input = st.selectbox("📖 Pilih Judul Novel", df['title'].values, key="genre")
-    selected_novel = df[df['title'] == title_input].iloc[0]
+    genre_input = st.text_input("✏️ Masukkan Genre Novel")
 
-    le = LabelEncoder()
-    df['genre_encoded'] = le.fit_transform(df['genres'])
+    if genre_input:
+        le = LabelEncoder()
+        df['genre_encoded'] = le.fit_transform(df['genres'])
 
-    X = df[['genre_encoded']]
-    y = df['title']
-    model = RandomForestClassifier()
-    model.fit(X, y)
+        X = df[['genre_encoded']]
+        y = df['title']
+        model = RandomForestClassifier()
+        model.fit(X, y)
 
-    genre_code = le.transform([selected_novel['genres']])[0]
-    df['genre_diff'] = abs(df['genre_encoded'] - genre_code)
-    recommended = df[df['title'] != title_input].sort_values(by='genre_diff').head(5)
+        if genre_input in le.classes_:
+            genre_code = le.transform([genre_input])[0]
+            df['genre_diff'] = abs(df['genre_encoded'] - genre_code)
+            recommended = df.sort_values(by='genre_diff').head(5)
 
-    st.markdown(f"### 📌 Rekomendasi berdasarkan genre: <span style='color:green'><code>{selected_novel['genres']}</code></span>", unsafe_allow_html=True)
-    st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
+            st.markdown(f"### 📌 Rekomendasi berdasarkan genre: <span style='color:green'><code>{genre_input}</code></span>", unsafe_allow_html=True)
+            st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
 
-    st.session_state.history.append({
-        'judul_dipilih': title_input,
-        'metode': 'genre',
-        'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
-    })
+            st.session_state.history.append({
+                'judul_dipilih': genre_input,
+                'metode': 'genre',
+                'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
+            })
+        else:
+            st.warning("Genre tidak ditemukan dalam data.")
 
 # ------------------ Distribusi Genre dan Status ------------------
 elif page == "📊 Distribusi Novel":
