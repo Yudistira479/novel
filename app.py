@@ -3,7 +3,7 @@ st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 
 @st.cache_data
@@ -85,38 +85,30 @@ elif page == "⭐ Rekomendasi Scored":
         'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
     })
 
-# ------------------ Rekomendasi Berdasarkan Genre ------------------
+# ------------------ Rekomendasi Berdasarkan Genre dari Judul ------------------
 elif page == "🎯 Rekomendasi Genre":
-    st.title("🎯 Rekomendasi Novel Berdasarkan Genre")
-    st.markdown("Masukkan genre novel dan sistem akan merekomendasikan novel dengan genre yang sesuai menggunakan algoritma **Random Forest**.")
+    st.title("🎯 Rekomendasi Novel Berdasarkan Genre dari Judul")
+    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi novel dengan genre yang sama.")
 
-    genre_input = st.text_input("✏️ Masukkan Genre Novel (case-sensitive)")
+    title_input = st.text_input("✏️ Masukkan Judul Novel (case-sensitive)")
 
-    if genre_input:
-        genre_filtered = df[df['genres'] == genre_input]
+    if title_input:
+        selected_novel = df[df['title'] == title_input]
 
-        if not genre_filtered.empty:
-            X = pd.get_dummies(df['genres'])
-            y = df['scored']
-            model = RandomForestRegressor()
-            model.fit(X, y)
+        if not selected_novel.empty:
+            selected_genre = selected_novel.iloc[0]['genres']
+            recommended = df[df['genres'] == selected_genre].sort_values(by='scored', ascending=False).head(5)
 
-            input_vector = pd.get_dummies(pd.Series([genre_input]))
-            input_vector = input_vector.reindex(columns=X.columns, fill_value=0)
-
-            df['genre_score'] = model.predict(X)
-            recommended = df[df['genres'] == genre_input].sort_values(by='scored', ascending=False).head(5)
-
-            st.markdown(f"### 📌 Rekomendasi berdasarkan genre: <span style='color:green'><code>{genre_input}</code></span>", unsafe_allow_html=True)
+            st.markdown(f"### 📌 Genre: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
             st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
 
             st.session_state.history.append({
-                'judul_dipilih': genre_input,
+                'judul_dipilih': title_input,
                 'metode': 'genre',
                 'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
             })
         else:
-            st.warning("Genre tidak ditemukan dalam data.")
+            st.warning("Judul tidak ditemukan dalam data.")
 
 # ------------------ Distribusi Genre dan Status ------------------
 elif page == "📊 Distribusi Novel":
