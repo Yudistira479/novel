@@ -1,8 +1,9 @@
 import streamlit as st
+st.set_page_config(page_title="Novel Recommendation App", layout="wide")
+
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics.pairwise import cosine_similarity
 
 # Load data
 @st.cache_data
@@ -12,11 +13,10 @@ def load_data():
 
 df = load_data()
 
-st.set_page_config(page_title="Novel Recommendation App", layout="wide")
-
 # Sidebar navigation
 page = st.sidebar.selectbox("Pilih Halaman", ["Home", "Rekomendasi Scored", "Rekomendasi Genre"])
 
+# Halaman Home
 if page == "Home":
     st.title("📚 Daftar Novel Populer")
     top_novels = df.sort_values(by="popularty", ascending=False).head(10)
@@ -26,6 +26,7 @@ if page == "Home":
     st.subheader("Riwayat Rekomendasi (Simulasi)")
     st.write("Belum ada riwayat rekomendasi.")
 
+# Halaman Rekomendasi Berdasarkan Scored
 elif page == "Rekomendasi Scored":
     st.title("🔍 Rekomendasi Berdasarkan Scored")
 
@@ -46,6 +47,7 @@ elif page == "Rekomendasi Scored":
     st.subheader(f"Rekomendasi untuk: {title_input}")
     st.dataframe(recommended[['title', 'authors', 'genres', 'scored']])
 
+# Halaman Rekomendasi Berdasarkan Genre
 elif page == "Rekomendasi Genre":
     st.title("📖 Rekomendasi Berdasarkan Genre")
 
