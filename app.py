@@ -90,21 +90,22 @@ elif page == "🎯 Rekomendasi Genre":
     st.title("🎯 Rekomendasi Novel Berdasarkan Genre")
     st.markdown("Masukkan genre novel dan sistem akan merekomendasikan novel dengan genre yang sesuai menggunakan algoritma **Random Forest**.")
 
-    genre_input = st.text_input("✏️ Masukkan Genre Novel")
+    genre_input = st.text_input("✏️ Masukkan Genre Novel (case-sensitive)")
 
     if genre_input:
-        le = LabelEncoder()
-        df['genre_encoded'] = le.fit_transform(df['genres'])
+        genre_filtered = df[df['genres'] == genre_input]
 
-        X = df[['genre_encoded']]
-        y = df['title']
-        model = RandomForestClassifier()
-        model.fit(X, y)
+        if not genre_filtered.empty:
+            X = pd.get_dummies(df['genres'])
+            y = df['scored']
+            model = RandomForestRegressor()
+            model.fit(X, y)
 
-        if genre_input in le.classes_:
-            genre_code = le.transform([genre_input])[0]
-            df['genre_diff'] = abs(df['genre_encoded'] - genre_code)
-            recommended = df.sort_values(by='genre_diff').head(5)
+            input_vector = pd.get_dummies(pd.Series([genre_input]))
+            input_vector = input_vector.reindex(columns=X.columns, fill_value=0)
+
+            df['genre_score'] = model.predict(X)
+            recommended = df[df['genres'] == genre_input].sort_values(by='scored', ascending=False).head(5)
 
             st.markdown(f"### 📌 Rekomendasi berdasarkan genre: <span style='color:green'><code>{genre_input}</code></span>", unsafe_allow_html=True)
             st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
