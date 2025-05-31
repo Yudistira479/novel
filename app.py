@@ -2,6 +2,7 @@ import streamlit as st
 st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 
@@ -18,7 +19,7 @@ if 'history' not in st.session_state:
 
 # Sidebar
 st.sidebar.title("📚 Navigasi")
-page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre"])
+page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"])
 
 # ---------------------- Home Page ----------------------
 if page == "🏠 Home":
@@ -55,7 +56,6 @@ elif page == "⭐ Rekomendasi Scored":
     st.markdown(f"### 🔍 Rekomendasi berdasarkan novel: <span style='color:green'><code>{title_input}</code></span>", unsafe_allow_html=True)
     st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
 
-    # Tambahkan ke riwayat dengan tabel
     st.session_state.history.append({
         'judul_dipilih': title_input,
         'metode': 'scored',
@@ -85,9 +85,33 @@ elif page == "🎯 Rekomendasi Genre":
     st.markdown(f"### 📌 Rekomendasi berdasarkan genre: <span style='color:green'><code>{selected_novel['genres']}</code></span>", unsafe_allow_html=True)
     st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
 
-    # Tambahkan ke riwayat
     st.session_state.history.append({
         'judul_dipilih': title_input,
         'metode': 'genre',
         'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
     })
+
+# ------------------ Distribusi Genre dan Status ------------------
+elif page == "📊 Distribusi Novel":
+    st.title("📊 Distribusi Genre dan Status Novel")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("🎭 Distribusi Genre")
+        genre_counts = df['genres'].value_counts()
+        fig1, ax1 = plt.subplots()
+        ax1.pie(genre_counts, labels=genre_counts.index, autopct='%1.1f%%', startangle=140)
+        ax1.axis('equal')
+        st.pyplot(fig1)
+
+    with col2:
+        if 'status' in df.columns:
+            st.subheader("📘 Distribusi Status Novel")
+            status_counts = df['status'].value_counts()
+            fig2, ax2 = plt.subplots()
+            ax2.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%', startangle=140)
+            ax2.axis('equal')
+            st.pyplot(fig2)
+        else:
+            st.warning("Kolom 'status' tidak ditemukan dalam dataset.")
