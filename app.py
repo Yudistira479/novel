@@ -23,7 +23,7 @@ if page == "Home":
     st.dataframe(top_novels[['title', 'authors', 'genres', 'scored', 'popularty']])
 
     st.markdown("---")
-    st.subheader("Riwayat Rekomendasi (Simulasi)")
+    st.subheader("Riwayat Rekomendasi")
     st.write("Belum ada riwayat rekomendasi.")
 
 # Halaman Rekomendasi Berdasarkan Scored
