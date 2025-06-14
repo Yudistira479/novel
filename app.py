@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
 # Konfigurasi halaman Streamlit
 st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
@@ -14,20 +12,6 @@ def load_data():
     return pd.read_csv('novels.csv')
 
 df = load_data()
-
-# Cache TF-IDF similarity model
-@st.cache_resource
-def compute_similarity(df_clean):
-    tfidf_genre = TfidfVectorizer()
-    tfidf_subgenre = TfidfVectorizer()
-
-    genre_tfidf = tfidf_genre.fit_transform(df_clean['genre'].astype(str))
-    subgenre_tfidf = tfidf_subgenre.fit_transform(df_clean['subgenre'].astype(str))
-
-    genre_sim = cosine_similarity(genre_tfidf)
-    subgenre_sim = cosine_similarity(subgenre_tfidf)
-
-    return genre_sim, subgenre_sim
 
 # Session state untuk riwayat
 if 'history' not in st.session_state:
@@ -53,7 +37,7 @@ h1, h2, h3 {
 # Sidebar Navigasi
 st.sidebar.title("📚 Navigasi")
 page = st.sidebar.radio("Pilih Halaman:", [
-    "🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "🎭 Rekomendasi TF-IDF", "📊 Distribusi Novel"
+    "🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"
 ])
 
 # -------------------- Home --------------------
@@ -108,29 +92,6 @@ elif page == "🎯 Rekomendasi Genre":
             st.session_state.history.append({
                 'judul_dipilih': input_title,
                 'rekomendasi': result[['title', 'authors', 'genres', 'scored']]
-            })
-        else:
-            st.warning("Judul tidak ditemukan.")
-
-# -------------------- TF-IDF --------------------
-elif page == "🎭 Rekomendasi TF-IDF":
-    st.title("🎭 Rekomendasi Berdasarkan Genre & Subgenre")
-
-    input_title = st.text_input("✏️ Masukkan Judul Novel (case-sensitive)")
-    if input_title:
-        if input_title in df['title'].values:
-            index = df[df['title'] == input_title].index[0]
-            genre_sim, subgenre_sim = compute_similarity(df)
-
-            sim_score = (genre_sim[index] + subgenre_sim[index]) / 2
-            df['similarity'] = sim_score
-            recommendations = df.sort_values(by='similarity', ascending=False).drop(index).head(5)
-
-            st.dataframe(recommendations[['title', 'authors', 'genre', 'subgenre', 'scored']], use_container_width=True)
-
-            st.session_state.history.append({
-                'judul_dipilih': input_title,
-                'rekomendasi': recommendations[['title', 'authors', 'genre', 'subgenre', 'scored']]
             })
         else:
             st.warning("Judul tidak ditemukan.")
