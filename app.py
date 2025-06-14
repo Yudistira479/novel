@@ -2,22 +2,34 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Konfigurasi halaman Streamlit
 st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 
-# Load data
+# Fungsi load data
 @st.cache_data
 def load_data():
     return pd.read_csv('novels.csv')
 
+# Fungsi TF-IDF genre dan subgenre (tidak ditampilkan di UI)
+@st.cache_resource
+def train_model(df_clean):
+    tfidf_genre = TfidfVectorizer()
+    tfidf_subgenre = TfidfVectorizer()
+    genre_tfidf = tfidf_genre.fit_transform(df_clean['genre'])
+    subgenre_tfidf = tfidf_subgenre.fit_transform(df_clean['subgenre'])
+    return genre_tfidf, subgenre_tfidf
+
+# Load dan proses data
 df = load_data()
+genre_tfidf, subgenre_tfidf = train_model(df)
 
 # Session state untuk riwayat
 if 'history' not in st.session_state:
     st.session_state.history = []
 
-# Styling
+# Styling CSS
 st.markdown("""
 <style>
 h1, h2, h3 {
@@ -34,7 +46,7 @@ h1, h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar Navigasi
+# Sidebar navigasi
 st.sidebar.title("📚 Navigasi")
 page = st.sidebar.radio("Pilih Halaman:", [
     "🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"
@@ -59,7 +71,13 @@ if page == "🏠 Home":
 elif page == "⭐ Rekomendasi Scored":
     st.title("⭐ Rekomendasi Berdasarkan Scored")
 
-    input_score = st.slider("🎯 Pilih Skor:", float(df['scored'].min()), float(df['scored'].max()), float(df['scored'].mean()), step=0.01)
+    input_score = st.slider(
+        "🎯 Pilih Skor:", 
+        float(df['scored'].min()), 
+        float(df['scored'].max()), 
+        float(df['scored'].mean()), 
+        step=0.01
+    )
 
     X = df[['scored']]
     y = df['popularty']
@@ -84,8 +102,8 @@ elif page == "🎯 Rekomendasi Genre":
     if input_title:
         selected = df[df['title'] == input_title]
         if not selected.empty:
-            genre = selected.iloc[0]['genres']
-            result = df[df['genres'] == genre].sort_values(by='scored', ascending=False).head(5)
+            genre = selected.iloc[0]['genre']
+            result = df[df['genre'] == genre].sort_values(by='scored', ascending=False).head(5)
 
             st.dataframe(result[['title', 'authors', 'genres', 'scored']], use_container_width=True)
 
@@ -104,7 +122,7 @@ elif page == "📊 Distribusi Novel":
 
     with col1:
         st.subheader("📌 Genre")
-        genre_counts = df['genres'].value_counts()
+        genre_counts = df['genre'].value_counts()
         fig1, ax1 = plt.subplots()
         ax1.pie(genre_counts, labels=genre_counts.index, autopct='%1.1f%%', startangle=140)
         ax1.axis('equal')
