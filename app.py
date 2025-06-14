@@ -1,11 +1,15 @@
 import streamlit as st
-st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
-
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
+# Konfigurasi halaman Streamlit
+st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
+
+# Load data
 @st.cache_data
 def load_data():
     df = pd.read_csv('novels.csv')
@@ -13,11 +17,25 @@ def load_data():
 
 df = load_data()
 
-# Inisialisasi session state untuk menyimpan riwayat
+# Fungsi TF-IDF dan Cosine Similarity
+@st.cache_resource
+def train_model(df_clean):
+    tfidf_genre = TfidfVectorizer()
+    tfidf_subgenre = TfidfVectorizer()
+    
+    genre_tfidf = tfidf_genre.fit_transform(df_clean['genre'].astype(str))
+    subgenre_tfidf = tfidf_subgenre.fit_transform(df_clean['subgenre'].astype(str))
+
+    genre_sim = cosine_similarity(genre_tfidf)
+    subgenre_sim = cosine_similarity(subgenre_tfidf)
+    
+    return genre_sim, subgenre_sim
+
+# Inisialisasi session state untuk riwayat rekomendasi
 if 'history' not in st.session_state:
     st.session_state.history = []
 
-# CSS styling untuk mempercantik
+# CSS styling
 st.markdown("""
 <style>
 h1, h2, h3, h4 {
@@ -40,11 +58,17 @@ h1, h2, h3, h4 {
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar navigasi
 st.sidebar.title("📚 Navigasi")
-page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"])
+page = st.sidebar.radio("Pilih Halaman:", [
+    "🏠 Home",
+    "⭐ Rekomendasi Scored",
+    "🎯 Rekomendasi Genre",
+    "🎭 Rekomendasi TF-IDF",
+    "📊 Distribusi Novel"
+])
 
-# ---------------------- Home Page ----------------------
+# ---------------------- Halaman HOME ----------------------
 if page == "🏠 Home":
     st.title("📚 Daftar Novel Populer")
     st.markdown("Berikut adalah daftar **10 novel paling populer** berdasarkan data:")
@@ -61,7 +85,7 @@ if page == "🏠 Home":
     else:
         st.info("Belum ada riwayat rekomendasi. Silakan coba fitur rekomendasi di sidebar.")
 
-# ------------------ Rekomendasi Berdasarkan Scored ------------------
+# ---------------------- Halaman SCORING ----------------------
 elif page == "⭐ Rekomendasi Scored":
     st.title("⭐ Rekomendasi Novel Berdasarkan Scored")
     st.markdown("Masukkan skor dan sistem akan merekomendasikan novel dengan **scored serupa** menggunakan algoritma **Random Forest**.")
@@ -85,7 +109,7 @@ elif page == "⭐ Rekomendasi Scored":
         'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
     })
 
-# ------------------ Rekomendasi Berdasarkan Genre dari Judul ------------------
+# ---------------------- Halaman GENRE ----------------------
 elif page == "🎯 Rekomendasi Genre":
     st.title("🎯 Rekomendasi Novel Berdasarkan Genre dari Judul")
     st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi novel dengan genre yang sama.")
@@ -110,7 +134,35 @@ elif page == "🎯 Rekomendasi Genre":
         else:
             st.warning("Judul tidak ditemukan dalam data.")
 
-# ------------------ Distribusi Genre dan Status ------------------
+# ---------------------- Halaman TF-IDF ----------------------
+elif page == "🎭 Rekomendasi TF-IDF":
+    st.title("🎭 Rekomendasi Berdasarkan Kemiripan Genre & Subgenre")
+    st.markdown("Masukkan judul novel, dan sistem akan merekomendasikan novel lain yang memiliki kemiripan genre dan subgenre menggunakan **TF-IDF + Cosine Similarity**.")
+
+    genre_sim, subgenre_sim = train_model(df)
+
+    input_title = st.text_input("✏️ Masukkan Judul Novel (case-sensitive)")
+
+    if input_title:
+        if input_title in df['title'].values:
+            index = df[df['title'] == input_title].index[0]
+
+            sim_score = (genre_sim[index] + subgenre_sim[index]) / 2
+            df['similarity'] = sim_score
+            top_recs = df.sort_values(by='similarity', ascending=False).drop(index).head(5)
+
+            st.markdown(f"### 📌 Rekomendasi untuk: <span style='color:green'><code>{input_title}</code></span>", unsafe_allow_html=True)
+            st.dataframe(top_recs[['title', 'authors', 'genre', 'subgenre', 'scored']], use_container_width=True)
+
+            st.session_state.history.append({
+                'judul_dipilih': input_title,
+                'metode': 'TF-IDF genre+subgenre',
+                'rekomendasi': top_recs[['title', 'authors', 'genre', 'subgenre', 'scored']]
+            })
+        else:
+            st.warning("Judul tidak ditemukan.")
+
+# ---------------------- Halaman DISTRIBUSI ----------------------
 elif page == "📊 Distribusi Novel":
     st.title("📊 Distribusi Genre dan Status Novel")
 
