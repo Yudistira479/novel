@@ -1,7 +1,7 @@
 import streamlit as st
 st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 
-import pandas as pd
+#import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
