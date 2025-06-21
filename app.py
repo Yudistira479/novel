@@ -1,220 +1,291 @@
-import streamlit as st
 import pandas as pd
+from flask import Flask, render_template, request, session, redirect, url_for
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics.pairwise import linear_kernel
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import confusion_matrix
+import pickle
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+from io import BytesIO
+import base64
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-import joblib
 
-# Set page configuration
-st.set_page_config(layout="wide", page_title="Novel Recommendation App")
+app = Flask(__name__)
+app.secret_key = 'your_secret_key_here' # Ganti dengan kunci rahasia yang kuat
 
-# --- Fungsi untuk memuat data dan model ---
-@st.cache_data
-def load_data():
-    try:
-        # Menggunakan raw link dari GitHub untuk novels.csv
-        data_url = "https://github.com/Yudistira479/novel/blob/main/novels.csv"
-        df = pd.read_csv(data_url)
+# Path untuk menyimpan model dan vectorizer
+MODEL_PATH = 'model_pelatihan.pkl'
+VECTORIZER_PATH = 'tfidf_vectorizer.pkl'
+DATA_PATH = 'novels.csv'
 
-        # Mengisi nilai NaN di kolom 'genres', 'description', 'author'
-        # Penting untuk mengisi NaN sebelum menggabungkan teks
-        df['genres'] = df['genres'].fillna('')
-        df['description'] = df['description'].fillna('')
-        df['author'] = df['author'].fillna('Unknown')
-        df['title'] = df['title'].fillna('Untitled')
-        df['status'] = df['status'].fillna('Unknown')
-        df['volume'] = df['volume'].fillna(0)
-        df['favorites'] = df['favorites'].fillna(0)
-        df['score'] = df['score'].fillna(0.0)
+# Muat dataset novel
+try:
+    novels_df = pd.read_csv(DATA_PATH)
+    novels_df.fillna('', inplace=True) # Mengisi nilai NaN dengan string kosong
+    # Pastikan kolom yang dibutuhkan ada
+    required_columns = ['Title', 'Description', 'Genre', 'Status', 'Volume', 'Favorites', 'Views', 'Score']
+    for col in required_columns:
+        if col not in novels_df.columns:
+            raise ValueError(f"Kolom '{col}' tidak ditemukan dalam novels.csv. Pastikan nama kolom sesuai.")
+except FileNotFoundError:
+    print(f"Error: File '{DATA_PATH}' tidak ditemukan. Pastikan file berada di direktori yang sama dengan app.py.")
+    exit()
+except Exception as e:
+    print(f"Error saat memuat atau memproses novels.csv: {e}")
+    exit()
 
-        return df
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return pd.DataFrame() # Mengembalikan DataFrame kosong jika ada kesalahan
+# Cek apakah model dan vectorizer sudah ada, jika tidak, arahkan untuk melatihnya
+if not os.path.exists(MODEL_PATH) or not os.path.exists(VECTORIZER_PATH):
+    print("Model atau TF-IDF Vectorizer tidak ditemukan. Silakan jalankan model_pelatihan.py terlebih dahulu.")
+    # Opsional: Bisa mengarahkan pengguna ke halaman error atau otomatis melatih
+    # Namun, lebih baik dilakukan secara terpisah untuk performa produksi
+    exit()
 
-@st.cache_resource
-def load_model_and_vectorizer(df):
-    # Menggabungkan teks dari kolom 'description', 'genre', dan 'author' secara langsung
-    # untuk TF-IDF, tanpa membuat kolom 'combined_features' baru di DataFrame.
-    # Pastikan kolom-kolom ini telah diisi NaN sebelumnya.
-    texts_for_tfidf = df['description'] + ' ' + df['genres'] + ' ' + df['author']
+# Muat model dan vectorizer yang sudah dilatih
+try:
+    with open(MODEL_PATH, 'rb') as f:
+        model = pickle.load(f)
+    with open(VECTORIZER_PATH, 'rb') as f:
+        tfidf_vectorizer = pickle.load(f)
+except Exception as e:
+    print(f"Error saat memuat model atau vectorizer: {e}")
+    exit()
+
+# Kolom yang akan digunakan untuk TF-IDF
+tfidf_columns = ['Title', 'Description', 'Genre', 'Tags']
+novels_df['combined_features'] = novels_df[tfidf_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
+tfidf_matrix = tfidf_vectorizer.transform(novels_df['combined_features'])
+
+# Inisialisasi riwayat pencarian
+if 'search_history' not in session:
+    session['search_history'] = []
+
+def get_recommendations_content_based(novel_title, top_n=10):
+    """
+    Memberikan rekomendasi novel berdasarkan kemiripan konten.
+    """
+    if novel_title not in novels_df['Title'].values:
+        return pd.DataFrame() # Mengembalikan DataFrame kosong jika novel tidak ditemukan
+
+    idx = novels_df[novels_df['Title'] == novel_title].index[0]
+    novel_features = tfidf_matrix[idx]
+
+    # Hitung kemiripan kosinus antara novel yang dipilih dan semua novel lainnya
+    # tfidf_matrix sudah dihitung di awal, jadi kita bisa langsung menggunakannya
+    cosine_similarities = (tfidf_matrix * novel_features.T).toarray().flatten()
+    similar_indices = cosine_similarities.argsort()[:-top_n-1:-1]
     
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(texts_for_tfidf)
-
-    # Menggunakan RandomForestRegressor untuk pemodelan
-    # Ini adalah contoh, Anda mungkin perlu melatih model lebih lanjut
-    # Untuk tujuan rekomendasi, kita akan lebih banyak menggunakan kesamaan TF-IDF
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    # Filter novel yang sama
+    similar_novels = novels_df.iloc[similar_indices].copy()
+    similar_novels = similar_novels[similar_novels['Title'] != novel_title]
     
-    # Misalkan kita ingin memprediksi 'score' berdasarkan fitur teks (ini bisa lebih kompleks)
-    # Untuk rekomendasi konten, kita lebih fokus pada kesamaan fitur
-    # Di sini, kita hanya akan 'melatih' model dengan data dummy atau placeholder jika tidak ada target eksplisit
-    # Karena ini content-based, kita akan menggunakan cosine similarity dari TF-IDF
+    # Tambahkan kolom kemiripan untuk ditampilkan
+    similar_novels['Similarity_Score'] = np.sort(cosine_similarities)[:-top_n-1:-1][1:] # Lewati skor novel itu sendiri
+
+    return similar_novels
+
+def add_to_history(query):
+    """Menambahkan query ke riwayat pencarian."""
+    if query not in session['search_history']:
+        session['search_history'].insert(0, query) # Tambahkan di awal
+    if len(session['search_history']) > 5: # Batasi riwayat hingga 5 item
+        session['search_history'].pop()
+
+@app.route('/')
+def home():
+    """Halaman utama: Menampilkan 10 novel terpopuler dan riwayat pencarian."""
+    top_novels = novels_df.sort_values(by='Views', ascending=False).head(10)
     
-    return tfidf, tfidf_matrix, model
+    # Ambil riwayat pencarian dari session
+    history = session.get('search_history', [])
+    
+    return render_template('home.html', top_novels=top_novels, search_history=history)
 
-df = load_data()
+@app.route('/recommend_by_score', methods=['GET', 'POST'])
+def recommend_by_score():
+    """Halaman rekomendasi berdasarkan score."""
+    recommendations = pd.DataFrame()
+    selected_novel_title = None
 
-# Hanya lanjutkan jika DataFrame tidak kosong
-if not df.empty:
-    tfidf, tfidf_matrix, model = load_model_and_vectorizer(df)
-
-    # Inisialisasi riwayat pencarian dalam session state
-    if 'search_history' not in st.session_state:
-        st.session_state.search_history = []
-
-    # --- Sidebar untuk Navigasi ---
-    st.sidebar.title("Navigasi")
-    page = st.sidebar.radio("Pilih Halaman", ["Beranda", "Rekomendasi Berdasarkan Skor", "Rekomendasi Berdasarkan Genre", "Distribusi Data"])
-
-    # --- Halaman 1: Beranda ---
-    if page == "Beranda":
-        st.title("Beranda: Rekomendasi Novel")
-        st.write("Selamat datang di aplikasi rekomendasi novel!")
-
-        st.header("10 Novel Terpopuler (Berdasarkan Favorit)")
-        # Menampilkan 10 novel terpopuler berdasarkan kolom 'favorites'
-        top_10_novels = df.sort_values(by='favorites', ascending=False).head(10)
-        st.dataframe(top_10_novels[['title', 'author', 'genre', 'favorites', 'score']])
-
-        st.header("Cari Novel dan Dapatkan Rekomendasi")
-        novel_title_input = st.text_input("Masukkan judul novel:")
-
-        if novel_title_input:
-            # Tambahkan ke riwayat pencarian
-            if novel_title_input not in st.session_state.search_history:
-                st.session_state.search_history.append(novel_title_input)
-            
-            # Cari novel yang cocok
-            matched_novels = df[df['title'].str.contains(novel_title_input, case=False, na=False)]
-
-            if not matched_novels.empty:
-                st.subheader(f"Hasil pencarian untuk '{novel_title_input}':")
-                st.dataframe(matched_novels[['title', 'author', 'genre', 'score']])
-
-                # Pilih novel untuk rekomendasi
-                selected_novel_index = st.selectbox("Pilih novel dari hasil pencarian untuk mendapatkan rekomendasi:", matched_novels.index, format_func=lambda x: df.loc[x, 'title'])
-                selected_novel = df.loc[selected_novel_index]
-
-                st.subheader(f"Rekomendasi serupa untuk: {selected_novel['title']}")
-                
-                # Hitung cosine similarity
-                idx = df[df['title'] == selected_novel['title']].index[0]
-                
-                # Dapatkan teks yang digunakan untuk TF-IDF untuk novel yang dipilih
-                selected_novel_text = df.loc[idx, 'description'] + ' ' + df.loc[idx, 'genre'] + ' ' + df.loc[idx, 'author']
-                
-                # Transformasi teks novel yang dipilih menggunakan TF-IDF vectorizer yang sudah dilatih
-                selected_novel_tfidf = tfidf.transform([selected_novel_text])
-
-                # Hitung kesamaan kosinus antara novel yang dipilih dan semua novel lainnya
-                cosine_similarities = linear_kernel(selected_novel_tfidf, tfidf_matrix).flatten()
-                
-                # Dapatkan indeks novel serupa, kecuali novel itu sendiri
-                related_novel_indices = cosine_similarities.argsort()[:-12:-1] # Top 10 + itself
-                recommended_novels = df.iloc[related_novel_indices].drop(selected_novel_index, errors='ignore') # Remove the selected novel itself
-
-                st.dataframe(recommended_novels[['title', 'author', 'genre', 'score', 'favorites']].head(10))
+    if request.method == 'POST':
+        selected_novel_title = request.form.get('novel_title')
+        if selected_novel_title:
+            add_to_history(selected_novel_title)
+            recommendations = get_recommendations_content_based(selected_novel_title, top_n=10)
+            if recommendations.empty:
+                message = f"Novel '{selected_novel_title}' tidak ditemukan atau tidak ada rekomendasi."
             else:
-                st.warning(f"Tidak ada novel yang ditemukan dengan judul '{novel_title_input}'.")
-
-        st.header("Riwayat Pencarian")
-        if st.session_state.search_history:
-            for i, history_item in enumerate(st.session_state.search_history):
-                st.write(f"{i+1}. {history_item}")
-            if st.button("Bersihkan Riwayat Pencarian"):
-                st.session_state.search_history = []
-                st.experimental_rerun()
+                message = None
         else:
-            st.info("Riwayat pencarian kosong.")
+            message = "Silakan pilih novel."
+    else:
+        message = "Pilih novel untuk mendapatkan rekomendasi berdasarkan skor."
 
+    return render_template('recommend_by_score.html', 
+                           novels=novels_df[['Title', 'Genre', 'Score']], 
+                           recommendations=recommendations,
+                           selected_novel=selected_novel_title,
+                           message=message)
 
-    # --- Halaman 2: Rekomendasi Berdasarkan Skor ---
-    elif page == "Rekomendasi Berdasarkan Skor":
-        st.title("Rekomendasi Berdasarkan Skor")
-        st.write("Temukan novel dengan skor tertinggi!")
+@app.route('/recommend_by_genre', methods=['GET', 'POST'])
+def recommend_by_genre():
+    """Halaman rekomendasi berdasarkan genre."""
+    recommendations = pd.DataFrame()
+    selected_genre = None
 
-        num_recommendations_score = st.slider("Jumlah novel untuk direkomendasikan:", 5, 50, 10)
-        
-        # Urutkan berdasarkan skor dan tampilkan
-        top_score_novels = df.sort_values(by='score', ascending=False).head(num_recommendations_score)
-        st.dataframe(top_score_novels[['title', 'author', 'genre', 'score', 'favorites']])
-
-    # --- Halaman 3: Rekomendasi Berdasarkan Genre ---
-    elif page == "Rekomendasi Berdasarkan Genre":
-        st.title("Rekomendasi Berdasarkan Genre")
-        st.write("Temukan novel berdasarkan genre favorit Anda.")
-
-        all_genres = sorted(list(set(g for genres_str in df['genre'].dropna() for g in genres_str.split(', '))))
-        selected_genre = st.selectbox("Pilih Genre:", ['Semua Genre'] + all_genres)
-
-        if selected_genre == 'Semua Genre':
-            filtered_novels = df
+    if request.method == 'POST':
+        selected_genre = request.form.get('genre')
+        if selected_genre:
+            add_to_history(selected_genre)
+            # Filter novel berdasarkan genre yang dipilih
+            genre_novels = novels_df[novels_df['Genre'].str.contains(selected_genre, case=False, na=False)].sort_values(by='Score', ascending=False)
+            # Ambil 10 novel teratas dari genre tersebut (atau semua jika kurang dari 10)
+            recommendations = genre_novels.head(10)
+            if recommendations.empty:
+                message = f"Tidak ada novel dengan genre '{selected_genre}' atau tidak ada rekomendasi."
+            else:
+                message = None
         else:
-            filtered_novels = df[df['genre'].str.contains(selected_genre, case=False, na=False)]
+            message = "Silakan pilih genre."
+    else:
+        message = "Pilih genre untuk mendapatkan rekomendasi."
+
+    genres = sorted(novels_df['Genre'].explode().unique().tolist()) # Ambil daftar genre unik
+    # Membersihkan string genre jika ada spasi ekstra atau karakter tak diinginkan
+    genres = [g.strip() for g in genres if g.strip()]
+    genres = sorted(list(set(genres))) # Hapus duplikat dan urutkan
+    
+    return render_template('recommend_by_genre.html', 
+                           genres=genres, 
+                           recommendations=recommendations,
+                           selected_genre=selected_genre,
+                           message=message)
+
+@app.route('/data_distribution')
+def data_distribution():
+    """Halaman untuk menampilkan distribusi data."""
+    plots = {}
+
+    # Distribusi Genre
+    plt.figure(figsize=(12, 6))
+    genre_counts = novels_df['Genre'].value_counts().head(15) # Ambil 15 genre teratas
+    sns.barplot(x=genre_counts.index, y=genre_counts.values, palette='viridis')
+    plt.title('Distribusi Genre Novel (Top 15)')
+    plt.xlabel('Genre')
+    plt.ylabel('Jumlah Novel')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    plots['genre'] = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    # Distribusi Status
+    plt.figure(figsize=(8, 5))
+    status_counts = novels_df['Status'].value_counts()
+    sns.barplot(x=status_counts.index, y=status_counts.values, palette='magma')
+    plt.title('Distribusi Status Novel')
+    plt.xlabel('Status')
+    plt.ylabel('Jumlah Novel')
+    plt.tight_layout()
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    plots['status'] = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    # Distribusi Volume (jika ada kolom Volume numerik)
+    if 'Volume' in novels_df.columns and pd.api.types.is_numeric_dtype(novels_df['Volume']):
+        plt.figure(figsize=(10, 6))
+        sns.histplot(novels_df['Volume'], bins=20, kde=True, color='purple')
+        plt.title('Distribusi Volume Novel')
+        plt.xlabel('Volume')
+        plt.ylabel('Jumlah Novel')
+        plt.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close()
+        plots['volume'] = base64.b64encode(buf.getvalue()).decode('utf-8')
+    else:
+        plots['volume'] = None # Tidak membuat plot jika Volume bukan numerik
+
+    # Distribusi Favorites
+    if 'Favorites' in novels_df.columns and pd.api.types.is_numeric_dtype(novels_df['Favorites']):
+        plt.figure(figsize=(10, 6))
+        sns.histplot(novels_df['Favorites'], bins=20, kde=True, color='teal')
+        plt.title('Distribusi Jumlah Favorites')
+        plt.xlabel('Jumlah Favorites')
+        plt.ylabel('Jumlah Novel')
+        plt.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close()
+        plots['favorites'] = base64.b64encode(buf.getvalue()).decode('utf-8')
+    else:
+        plots['favorites'] = None # Tidak membuat plot jika Favorites bukan numerik
+
+    return render_template('data_distribution.html', plots=plots)
+
+@app.route('/confusion_matrix')
+def show_confusion_matrix():
+    """Halaman untuk menampilkan Confusion Matrix dan akurasi."""
+    try:
+        # Load data pelatihan (ini harusnya dari model_pelatihan.py)
+        # Untuk demo ini, kita akan membuat prediksi dummy jika tidak ada data asli
+        # Di aplikasi nyata, Anda akan memiliki set data uji yang terpisah
         
-        num_recommendations_genre = st.slider("Jumlah novel untuk direkomendasikan:", 5, 50, 10)
+        # Contoh dummy data untuk Confusion Matrix
+        # Diasumsikan kita memiliki kolom 'Genre' sebagai target
         
-        if not filtered_novels.empty:
-            # Urutkan berdasarkan favorit atau skor untuk rekomendasi yang lebih baik dalam genre
-            recommended_by_genre = filtered_novels.sort_values(by='favorites', ascending=False).head(num_recommendations_genre)
-            st.dataframe(recommended_by_genre[['title', 'author', 'genre', 'score', 'favorites']])
+        # Mengambil sampel data untuk prediksi
+        # Jika Anda memiliki data pelatihan/pengujian yang disimpan, gunakan itu.
+        # Untuk tujuan demo, kita akan membuat prediksi pada subset data.
+        
+        # Menggunakan kolom 'Genre' sebagai target
+        novels_df['target_genre'] = novels_df['Genre'].apply(lambda x: x.split(',')[0].strip() if x else 'Unknown')
+        
+        # Kita perlu memastikan target_genre adalah kategori yang bisa diprediksi
+        # Untuk kesederhanaan, kita akan menggunakan sebagian kecil data
+        sample_df = novels_df.sample(frac=0.3, random_state=42) # Ambil 30% data sebagai sampel
+        
+        # Pastikan tfidf_matrix sudah diinisialisasi
+        if 'tfidf_matrix' not in globals():
+            novels_df['combined_features'] = novels_df[tfidf_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
+            tfidf_matrix = tfidf_vectorizer.transform(novels_df['combined_features'])
+
+        X_sample = tfidf_vectorizer.transform(sample_df['combined_features'])
+        y_true_sample = sample_df['target_genre']
+
+        # Pastikan model sudah dilatih dan bisa memprediksi
+        if model:
+            y_pred_sample = model.predict(X_sample)
+            
+            # Hitung akurasi
+            accuracy = np.mean(y_pred_sample == y_true_sample) * 100
+            
+            # Buat Confusion Matrix
+            cm = confusion_matrix(y_true_sample, y_pred_sample, labels=model.classes_)
+            
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=model.classes_, yticklabels=model.classes_)
+            plt.title('Confusion Matrix Prediksi Genre')
+            plt.xlabel('Prediksi')
+            plt.ylabel('Aktual')
+            plt.tight_layout()
+            buf = BytesIO()
+            plt.savefig(buf, format='png')
+            plt.close()
+            cm_plot = base64.b64encode(buf.getvalue()).decode('utf-8')
         else:
-            st.warning(f"Tidak ada novel yang ditemukan untuk genre '{selected_genre}'.")
+            cm_plot = None
+            accuracy = "Model belum dilatih atau dimuat."
 
-    # --- Halaman 4: Distribusi Data ---
-    elif page == "Distribusi Data":
-        st.title("Distribusi Data Novel")
-        st.write("Visualisasi distribusi fitur-fitur novel.")
+    except Exception as e:
+        cm_plot = None
+        accuracy = f"Error saat membuat Confusion Matrix: {e}"
+        print(f"Error saat membuat Confusion Matrix: {e}")
 
-        st.header("Distribusi Genre")
-        # Membersihkan dan menghitung frekuensi genre
-        genres_list = df['genre'].dropna().apply(lambda x: [g.strip() for g in x.split(', ')])
-        all_genres_flat = [item for sublist in genres_list for item in sublist]
-        genre_counts = pd.Series(all_genres_flat).value_counts().reset_index()
-        genre_counts.columns = ['Genre', 'Count']
-        
-        fig_genre = px.bar(genre_counts.head(20), x='Genre', y='Count', title='Top 20 Distribusi Genre Novel')
-        st.plotly_chart(fig_genre, use_container_width=True)
+    return render_template('confusion_matrix.html', cm_plot=cm_plot, accuracy=accuracy)
 
-        st.header("Distribusi Status")
-        status_counts = df['status'].value_counts().reset_index()
-        status_counts.columns = ['Status', 'Count']
-        fig_status = px.pie(status_counts, values='Count', names='Status', title='Distribusi Status Novel')
-        st.plotly_chart(fig_status, use_container_width=True)
-
-        st.header("Distribusi Volume")
-        # Mengelompokkan volume agar visualisasi tidak terlalu padat
-        df['volume_bin'] = pd.cut(df['volume'], bins=5, labels=False, include_lowest=True)
-        volume_bins_labels = [f"Bin {i}" for i in sorted(df['volume_bin'].unique())]
-        volume_counts = df['volume_bin'].value_counts().sort_index().reset_index()
-        volume_counts.columns = ['Volume Bin Index', 'Count']
-        
-        # Membuat label yang lebih deskriptif
-        volume_counts['Volume Range'] = volume_counts['Volume Bin Index'].apply(lambda x: f"{df['volume'].min() + x * (df['volume'].max() - df['volume'].min()) / 5:.0f} - {df['volume'].min() + (x+1) * (df['volume'].max() - df['volume'].min()) / 5:.0f}")
-
-        fig_volume = px.bar(volume_counts, x='Volume Range', y='Count', title='Distribusi Volume Novel (Binned)')
-        st.plotly_chart(fig_volume, use_container_width=True)
-
-        st.header("Distribusi Favorit")
-        # Mengelompokkan favorit
-        df['favorites_bin'] = pd.cut(df['favorites'], bins=10, labels=False, include_lowest=True)
-        favorites_counts = df['favorites_bin'].value_counts().sort_index().reset_index()
-        favorites_counts.columns = ['Favorites Bin Index', 'Count']
-        
-        # Membuat label yang lebih deskriptif
-        favorites_counts['Favorites Range'] = favorites_counts['Favorites Bin Index'].apply(lambda x: f"{df['favorites'].min() + x * (df['favorites'].max() - df['favorites'].min()) / 10:.0f} - {df['favorites'].min() + (x+1) * (df['favorites'].max() - df['favorites'].min()) / 10:.0f}")
-
-        fig_favorites = px.bar(favorites_counts, x='Favorites Range', y='Count', title='Distribusi Favorit Novel (Binned)')
-        st.plotly_chart(fig_favorites, use_container_width=True)
-
-        st.header("Distribusi Skor")
-        fig_score = px.histogram(df, x='score', nbins=20, title='Distribusi Skor Novel', labels={'score': 'Skor'})
-        st.plotly_chart(fig_score, use_container_width=True)
-
-else:
-    st.error("Gagal memuat data. Mohon periksa URL GitHub atau format file.")
+if __name__ == '__main__':
+    app.run(debug=True)
