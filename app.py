@@ -1,186 +1,173 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import confusion_matrix
+from sklearn.ensemble import RandomForestRegressor
+import zipfile
+import io
 
-# ---------------- CONFIG ----------------
 st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 
-# ---------------- LOAD DATA ----------------
+# ------------------ Upload dan Load Data ------------------
 @st.cache_data
-def load_data():
-    df = pd.read_csv('/mnt/data/novels.csv')
-    df = df.dropna(subset=['title', 'genre', 'rating'])  # pastikan kolom penting tidak kosong
-    return df
+def load_data_from_zip(zip_file):
+    with zipfile.ZipFile(zip_file) as z:
+        csv_files = [f for f in z.namelist() if f.endswith('.csv')]
+        if not csv_files:
+            st.error("❌ File .csv tidak ditemukan dalam ZIP.")
+            st.stop()
+        with z.open(csv_files[0]) as f:
+            return pd.read_csv(f)
 
-df = load_data()
+st.sidebar.title("📁 Upload Dataset ZIP")
+uploaded_file = st.sidebar.file_uploader("Unggah file ZIP yang berisi 'novels.csv'", type="zip")
 
-# ---------------- PREPROCESS TF-IDF (Genre only) ----------------
-@st.cache_data
-def preprocess(df):
-    df = df.copy()
-    df['genre'] = df['genre'].fillna('')
-    
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df['genre'])
+if uploaded_file:
+    df = load_data_from_zip(uploaded_file)
+else:
+    st.warning("📌 Silakan unggah file ZIP terlebih dahulu.")
+    st.stop()
 
-    return df, tfidf_matrix, tfidf
+# ------------------ Inisialisasi Riwayat ------------------
+if 'history' not in st.session_state:
+    st.session_state.history = []
 
-df, tfidf_matrix, tfidf = preprocess(df)
+# ------------------ CSS Styling ------------------
+st.markdown("""
+<style>
+h1, h2, h3, h4 {
+    color: #2E8B57;
+}
+[data-testid="stSidebar"] {
+    background-color: #f0f2f6;
+}
+.stButton>button {
+    color: white;
+    background-color: #2E8B57;
+    border-radius: 10px;
+}
+.stTable {
+    background-color: #ffffff;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ---------------- TRAIN RANDOM FOREST REGRESSOR (Rating) ----------------
-@st.cache_data
-def train_random_forest(df):
-    df_model = df.copy()
-    features = ['views', 'likes', 'chapter_count', 'popularity', 'score']
-    
-    le = LabelEncoder()
-    df_model['status_encoded'] = le.fit_transform(df_model['status'].astype(str))
-    features.append('status_encoded')
+# ------------------ Sidebar Navigasi ------------------
+page = st.sidebar.radio("📚 Navigasi", ["🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"])
 
-    df_model = df_model.dropna(subset=features + ['rating'])
-    X = df_model[features]
-    y = df_model['rating']
+# ---------------------- Home Page ----------------------
+if page == "🏠 Home":
+    st.title("📚 Daftar Novel Populer")
+    st.markdown("Berikut adalah daftar **10 novel paling populer** berdasarkan data:")
 
+    top_novels = df.sort_values(by="popularty", ascending=False).head(10)
+    st.dataframe(top_novels[['title', 'authors', 'genres', 'scored', 'popularty']], use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📜 Riwayat Rekomendasi")
+    if st.session_state.history:
+        for item in st.session_state.history[::-1]:
+            st.markdown(f"### 🔎 Rekomendasi berdasarkan: <span style='color:green'><code>{item['judul_dipilih']}</code></span>", unsafe_allow_html=True)
+            st.table(item['rekomendasi'])
+    else:
+        st.info("Belum ada riwayat rekomendasi. Silakan coba fitur rekomendasi di sidebar.")
+
+# ------------------ Rekomendasi Berdasarkan Scored ------------------
+elif page == "⭐ Rekomendasi Scored":
+    st.title("⭐ Rekomendasi Novel Berdasarkan Scored")
+    st.markdown("Masukkan skor dan sistem akan merekomendasikan novel dengan **scored serupa** menggunakan algoritma **Random Forest Regressor**.")
+
+    input_score = st.slider("🎯 Pilih Nilai Skor", 
+                            min_value=float(df['scored'].min()),
+                            max_value=float(df['scored'].max()), 
+                            value=float(df['scored'].mean()), 
+                            step=0.01)
+
+    X = df[['scored']]
+    y = df['popularty']
     model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
 
-    return model, le
+    r2_score = model.score(X, y)
+    st.markdown(f"📈 <b>Model R² Score:</b> <code>{r2_score:.4f}</code>", unsafe_allow_html=True)
 
-rf_model, le_status = train_random_forest(df)
+    predicted_pop = model.predict([[input_score]])[0]
+    st.markdown(f"📊 <b>Prediksi Popularitas untuk skor {input_score:.2f}:</b> <code>{predicted_pop:.2f}</code>", unsafe_allow_html=True)
 
-# ---------------- CLASSIFIER FOR RATING ----------------
-@st.cache_data
-def train_rf_classifier_rating(df):
-    df_clf = df.copy()
-    df_clf['rating_class'] = pd.cut(df_clf['rating'], bins=[0, 2, 4, 5], labels=['low', 'medium', 'high'])
+    df['predicted_popularty'] = model.predict(df[['scored']])
+    df['predicted_diff'] = abs(df['predicted_popularty'] - predicted_pop)
+    recommended = df.sort_values(by='predicted_diff').head(5)
 
-    le = LabelEncoder()
-    df_clf['status_encoded'] = le.fit_transform(df_clf['status'].astype(str))
+    st.markdown("### 📚 Rekomendasi Novel:")
+    st.dataframe(recommended[['title', 'authors', 'genres', 'scored', 'popularty', 'predicted_popularty']], use_container_width=True)
 
-    features = ['views', 'likes', 'chapter_count', 'popularity', 'score', 'status_encoded']
-    df_clf = df_clf.dropna(subset=features + ['rating_class'])
+    st.session_state.history.append({
+        'judul_dipilih': f'Scored {input_score:.2f}',
+        'metode': 'random_forest_scored',
+        'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
+    })
 
-    X = df_clf[features]
-    y = df_clf['rating_class']
+# ------------------ Rekomendasi Berdasarkan Genre dari Judul ------------------
+elif page == "🎯 Rekomendasi Genre":
+    st.title("🎯 Rekomendasi Novel Berdasarkan Genre dari Judul")
+    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi novel dengan genre yang sama.")
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X, y)
-    y_pred = model.predict(X)
+    title_input = st.text_input("✏️ Masukkan Judul Novel (case-sensitive)")
 
-    cm = confusion_matrix(y, y_pred, labels=['low', 'medium', 'high'])
+    if title_input:
+        selected_novel = df[df['title'] == title_input]
 
-    return model, le, cm, y, y_pred
+        if not selected_novel.empty:
+            selected_genre = selected_novel.iloc[0]['genres']
+            genre_novels = df[df['genres'] == selected_genre]
 
-# ---------------- CLASSIFIER FOR SCORE ----------------
-@st.cache_data
-def train_rf_classifier_score(df):
-    df_clf = df.copy()
-    df_clf['score_class'] = pd.cut(df_clf['score'], bins=[0, 2, 4, 6, 10], labels=['very_low', 'low', 'medium', 'high'])
+            st.markdown(f"### 📌 Genre: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
 
-    le = LabelEncoder()
-    df_clf['status_encoded'] = le.fit_transform(df_clf['status'].astype(str))
+            X_genre = genre_novels[['scored']]
+            y_genre = genre_novels['popularty']
+            model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
+            model_genre.fit(X_genre, y_genre)
 
-    features = ['views', 'likes', 'chapter_count', 'popularity', 'status_encoded']
-    df_clf = df_clf.dropna(subset=features + ['score_class'])
+            r2_genre = model_genre.score(X_genre, y_genre)
+            st.markdown(f"📈 <b>Model R² Score (genre ini):</b> <code>{r2_genre:.4f}</code>", unsafe_allow_html=True)
 
-    X = df_clf[features]
-    y = df_clf['score_class']
+            genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
+            recommended = genre_novels.sort_values(by='predicted_popularty', ascending=False).head(5)
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X, y)
-    y_pred = model.predict(X)
+            st.markdown("### 📚 Rekomendasi Novel Berdasarkan Prediksi Popularitas:")
+            st.dataframe(recommended[['title', 'authors', 'genres', 'scored', 'popularty', 'predicted_popularty']], use_container_width=True)
 
-    cm = confusion_matrix(y, y_pred, labels=['very_low', 'low', 'medium', 'high'])
+            st.session_state.history.append({
+                'judul_dipilih': title_input,
+                'metode': 'genre + random_forest',
+                'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
+            })
+        else:
+            st.warning("Judul tidak ditemukan dalam data.")
 
-    return model, le, cm, y, y_pred
+# ------------------ Distribusi Genre dan Status ------------------
+elif page == "📊 Distribusi Novel":
+    st.title("📊 Distribusi Genre dan Status Novel")
 
-# ---------------- SIDEBAR ----------------
-st.sidebar.title("📚 Menu Navigasi")
-page = st.sidebar.radio("Pilih Halaman:", ["Home", "Rekomendasi Rating (RF)", "Rekomendasi Genre (Content-Based)", "Evaluasi Model"])
+    col1, col2 = st.columns(2)
 
-# ---------------- HOME PAGE ----------------
-if page == "Home":
-    st.title("📖 Daftar 10 Novel Terpopuler")
-    top_novels = df.sort_values(by='popularity', ascending=False).head(10)
-    st.dataframe(top_novels[['title', 'author', 'genre', 'rating', 'score', 'views', 'popularity']])
+    with col1:
+        st.subheader("🎭 Distribusi Genre")
+        genre_counts = df['genres'].value_counts()
+        fig1, ax1 = plt.subplots()
+        ax1.pie(genre_counts, labels=genre_counts.index, autopct='%1.1f%%', startangle=140)
+        ax1.axis('equal')
+        st.pyplot(fig1)
 
-# ---------------- REKOMENDASI BERDASARKAN RATING ----------------
-elif page == "Rekomendasi Rating (RF)":
-    st.title("🎯 Rekomendasi Berdasarkan Rating (Random Forest)")
-    selected_title = st.selectbox("Pilih Judul Novel", df['title'].unique())
-
-    selected_novel = df[df['title'] == selected_title].iloc[0]
-
-    input_features = pd.DataFrame([{
-        'views': selected_novel['views'],
-        'likes': selected_novel['likes'],
-        'chapter_count': selected_novel['chapter_count'],
-        'popularity': selected_novel['popularity'],
-        'score': selected_novel['score'],
-        'status_encoded': le_status.transform([selected_novel['status']])[0] if pd.notnull(selected_novel['status']) else 0
-    }])
-
-    predicted_rating = rf_model.predict(input_features)[0]
-    st.write(f"📌 Prediksi Rating: **{predicted_rating:.2f}**")
-
-    # Prediksi semua data untuk rekomendasi
-    df_temp = df.copy()
-    df_temp['status_encoded'] = le_status.transform(df_temp['status'].astype(str))
-    df_temp = df_temp.dropna(subset=['score'])
-    df_temp['predicted_rating'] = rf_model.predict(df_temp[['views', 'likes', 'chapter_count', 'popularity', 'score', 'status_encoded']])
-    recommended = df_temp[df_temp['title'] != selected_title].copy()
-    recommended['score_diff'] = abs(recommended['predicted_rating'] - predicted_rating)
-    result = recommended.sort_values(by='score_diff').head(10)
-
-    st.subheader("📚 Rekomendasi Novel dengan Rating Mirip")
-    st.dataframe(result[['title', 'author', 'genre', 'rating', 'predicted_rating', 'score']])
-
-# ---------------- CONTENT-BASED FILTERING ----------------
-elif page == "Rekomendasi Genre (Content-Based)":
-    st.title("🔍 Rekomendasi Berdasarkan Genre (TF-IDF)")
-    selected_title = st.selectbox("Pilih Judul Novel", df['title'].unique(), key="genre")
-
-    if selected_title:
-        idx = df[df['title'] == selected_title].index[0]
-        cosine_sim = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
-        indices = cosine_sim.argsort()[-11:-1][::-1]
-
-        st.subheader("📚 Rekomendasi Novel dengan Genre Mirip")
-        st.dataframe(df.iloc[indices][['title', 'author', 'genre', 'rating', 'score']])
-
-        st.subheader("🔍 Fitur TF-IDF dari Genre (Top 10 Term)")
-        vector_index = tfidf_matrix[idx].nonzero()[1]
-        tfidf_vals = tfidf_matrix[idx, vector_index].toarray().flatten()
-        top_terms = np.array(tfidf.get_feature_names_out())[vector_index]
-
-        tfidf_table = pd.DataFrame({
-            'term': top_terms,
-            'weight': tfidf_vals
-        }).sort_values(by='weight', ascending=False).head(10)
-
-        st.dataframe(tfidf_table)
-
-# ---------------- EVALUASI MODEL ----------------
-elif page == "Evaluasi Model":
-    st.title("📈 Evaluasi Model Random Forest")
-
-    st.subheader("📊 Confusion Matrix Berdasarkan Rating")
-    clf_rating, _, cm_rating, y_rating, y_pred_rating = train_rf_classifier_rating(df)
-    fig1, ax1 = plt.subplots()
-    sns.heatmap(cm_rating, annot=True, fmt='d', xticklabels=['low', 'medium', 'high'],
-                yticklabels=['low', 'medium', 'high'], cmap='Blues', ax=ax1)
-    st.pyplot(fig1)
-
-    st.subheader("📊 Confusion Matrix Berdasarkan Score")
-    clf_score, _, cm_score, y_score, y_pred_score = train_rf_classifier_score(df)
-    fig2, ax2 = plt.subplots()
-    sns.heatmap(cm_score, annot=True, fmt='d', xticklabels=['very_low', 'low', 'medium', 'high'],
-                yticklabels=['very_low', 'low', 'medium', 'high'], cmap='Greens', ax=ax2)
-    st.pyplot(fig2)
+    with col2:
+        if 'status' in df.columns:
+            st.subheader("📘 Distribusi Status Novel")
+            status_counts = df['status'].value_counts()
+            fig2, ax2 = plt.subplots()
+            ax2.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%', startangle=140)
+            ax2.axis('equal')
+            st.pyplot(fig2)
+        else:
+            st.warning("Kolom 'status' tidak ditemukan dalam dataset.")
