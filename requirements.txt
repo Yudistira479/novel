@@ -1,6 +1,4 @@
-Flask
+streamlit
 pandas
 scikit-learn
-matplotlib
-seaborn
 numpy
