@@ -16,44 +16,57 @@ st.set_page_config(
 
 # --- Path dan URL ---
 MODEL_PATH = 'model_pelatihan.pkl'
-# Memperbarui VECTORIZER_PATH ke 'tfidf.pkl'
-VECTORIZER_PATH = 'tfidf.pkl' 
-DATA_URL = 'https://github.com/Yudistira479/novel/blob/main/novels.csv'
+VECTORIZER_PATH = 'tfidf.pkl' # Pastikan nama file ini sesuai di GitHub Anda
+DATA_URL = 'https://raw.githubusercontent.com/Yudistira479/novel/main/novels.csv'
+# Atau, jika Anda menggunakan file lokal sebagai workaround:
+# DATA_PATH = 'novels.csv' 
+
 
 # --- Fungsi Pemuatan Data dan Model (dengan caching untuk performa) ---
 
 @st.cache_data
-def load_data(url):
-    """Memuat dataset novel dari URL GitHub."""
+def load_data(source):
+    """Memuat dataset novel dari URL GitHub atau path lokal."""
     try:
-        # Menambahkan on_bad_lines='skip' untuk melewati baris yang rusak
-        # Menambahkan sep=',' dan encoding='utf-8' untuk penanganan CSV yang lebih baik
-        # Memastikan nama kolom 'title' (huruf kecil) yang benar
-        df = pd.read_csv(url, sep=',', on_bad_lines='skip', encoding='utf-8')
+        if source.startswith('http'):
+            # Jika sumber adalah URL, baca langsung
+            df = pd.read_csv(source, sep=',', on_bad_lines='skip', encoding='utf-8')
+        else:
+            # Jika sumber adalah path lokal, baca dari file
+            df = pd.read_csv(source, sep=',', on_bad_lines='skip', encoding='utf-8')
+
         df.fillna('', inplace=True)
-        # Mengganti 'synopsis' dan 'genres' untuk konsistensi dengan logika aplikasi
-        # Menghapus 'views' dari required_columns
-        required_columns = ['title', 'synopsis', 'genres', 'status', 'n_volumes', 'favorites', 'score']
-        for col in required_columns:
+        
+        # Kolom yang wajib ada setelah pembacaan awal dari CSV
+        # Mengacu pada nama kolom asli di novels.csv yang Anda berikan
+        required_raw_columns = ['title', 'synopsis', 'genres', 'status', 'n_volumes', 'favorites', 'score']
+        
+        for col in required_raw_columns:
             if col not in df.columns:
-                st.error(f"Kolom '{col}' tidak ditemukan dalam dataset dari GitHub. Pastikan nama kolom sesuai. Kolom yang ada: {df.columns.tolist()}")
-                st.stop() # Menghentikan eksekusi aplikasi jika kolom penting hilang
+                st.error(f"Kolom asli '{col}' tidak ditemukan dalam dataset. Pastikan nama kolom sesuai. Kolom yang ada: {df.columns.tolist()}")
+                st.stop()
         
         # Pastikan 'score' adalah numerik
         df['score'] = pd.to_numeric(df['score'], errors='coerce').fillna(0)
         
         # Melakukan rename kolom untuk penggunaan yang lebih mudah di seluruh aplikasi
-        df.rename(columns={'title': 'Judul', 'synopsis': 'Description', 'genres': 'Genre',
-                           'status': 'Status', 'n_volumes': 'Volume', 'favorites': 'Favorites',
-                           'score': 'Score'}, inplace=True)
+        df.rename(columns={
+            'title': 'Judul', 
+            'synopsis': 'Description', 
+            'genres': 'Genre',
+            'status': 'Status', 
+            'n_volumes': 'Volume', 
+            'favorites': 'Favorites',
+            'score': 'Score'
+        }, inplace=True)
         
-        # Tambahkan kolom 'Tags' jika tidak ada (penting untuk TFIDF jika ada)
+        # Tambahkan kolom 'Tags' jika tidak ada di dataset asli
         if 'Tags' not in df.columns:
-            df['Tags'] = '' # Mengisi dengan string kosong jika tidak ada
+            df['Tags'] = '' 
 
         return df
     except Exception as e:
-        st.error(f"Error saat memuat atau memproses novels.csv dari GitHub: {e}")
+        st.error(f"Error saat memuat atau memproses novels.csv dari {source}: {e}")
         st.stop()
 
 @st.cache_resource
@@ -74,11 +87,11 @@ def load_model_and_vectorizer():
         st.stop()
 
 # Muat data, model, dan vectorizer
-novels_df = load_data(DATA_URL)
+# Gunakan DATA_URL jika ingin dari GitHub, atau DATA_PATH jika dari lokal
+novels_df = load_data(DATA_URL) # Ganti ke DATA_PATH jika Anda meletakkan file secara lokal
 model, tfidf_vectorizer = load_model_and_vectorizer()
 
 # Siapkan fitur gabungan untuk TF-IDF dan matriks TF-IDF
-# Menggunakan 'Judul' setelah rename, dan kolom lain yang relevan
 tfidf_columns = ['Judul', 'Description', 'Genre', 'Tags']
 novels_df['combined_features'] = novels_df[tfidf_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
 tfidf_matrix = tfidf_vectorizer.transform(novels_df['combined_features'])
@@ -92,11 +105,9 @@ def get_recommendations_content_based(novel_title, top_n=10):
     """
     Memberikan rekomendasi novel berdasarkan kemiripan konten.
     """
-    # Menggunakan 'Judul'
     if novel_title not in novels_df['Judul'].values:
         return pd.DataFrame()
 
-    # Menggunakan 'Judul'
     idx = novels_df[novels_df['Judul'] == novel_title].index[0]
     novel_features = tfidf_matrix[idx]
 
@@ -106,7 +117,6 @@ def get_recommendations_content_based(novel_title, top_n=10):
     similar_novels = novels_df.iloc[similar_indices].copy()
     similar_novels['Similarity_Score'] = cosine_similarities[similar_indices]
     
-    # Menggunakan 'Judul'
     similar_novels = similar_novels[similar_novels['Judul'] != novel_title]
     
     return similar_novels.head(top_n)
@@ -129,10 +139,8 @@ if page == "Beranda":
 
     with col1:
         st.header("10 Novel Terpopuler (Berdasarkan Score)")
-        # Mengganti pengurutan dari 'Views' ke 'Score'
         top_novels = novels_df.sort_values(by='Score', ascending=False).head(10)
         if not top_novels.empty:
-            # Hanya menampilkan Judul dan Genre
             st.dataframe(top_novels[['Judul', 'Genre', 'Score']])
         else:
             st.info("Tidak ada novel terpopuler untuk ditampilkan.")
@@ -148,7 +156,6 @@ if page == "Beranda":
 elif page == "Rekomendasi (Novel)":
     st.title("Rekomendasi Berdasarkan Novel")
 
-    # Menggunakan 'Judul'
     novel_titles = sorted(novels_df['Judul'].tolist())
     selected_novel_title = st.selectbox("Pilih Novel:", ['-- Pilih Novel --'] + novel_titles)
 
@@ -158,7 +165,6 @@ elif page == "Rekomendasi (Novel)":
         
         if not recommendations.empty:
             st.subheader(f"Rekomendasi untuk '{selected_novel_title}'")
-            # Menggunakan 'Judul' untuk tampilan
             st.dataframe(recommendations[['Judul', 'Genre', 'Score', 'Similarity_Score']].style.format({"Similarity_Score": "{:.4f}"}))
         else:
             st.warning(f"Novel '{selected_novel_title}' tidak ditemukan atau tidak ada rekomendasi.")
@@ -181,7 +187,6 @@ elif page == "Rekomendasi (Genre)":
         
         if not recommendations.empty:
             st.subheader(f"Rekomendasi Novel Genre '{selected_genre}'")
-            # Menggunakan 'Judul' untuk tampilan
             st.dataframe(recommendations[['Judul', 'Genre', 'Score']])
         else:
             st.warning(f"Tidak ada novel dengan genre '{selected_genre}' atau tidak ada rekomendasi.")
