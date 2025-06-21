@@ -17,7 +17,7 @@ st.set_page_config(
 # --- Path dan URL ---
 MODEL_PATH = 'model_pelatihan.pkl'
 VECTORIZER_PATH = 'tfidf_vectorizer.pkl'
-DATA_URL = 'https://github.com/Yudistira479/novel/blob/main/novels.csv'
+DATA_URL = 'https://raw.githubusercontent.com/Yudistira479/novel/main/novels.csv'
 
 # --- Fungsi Pemuatan Data dan Model (dengan caching untuk performa) ---
 
@@ -25,7 +25,9 @@ DATA_URL = 'https://github.com/Yudistira479/novel/blob/main/novels.csv'
 def load_data(url):
     """Memuat dataset novel dari URL GitHub."""
     try:
-        df = pd.read_csv(url)
+        # Menambahkan on_bad_lines='skip' untuk melewati baris yang rusak
+        # Menambahkan sep=',' dan encoding='utf-8' untuk penanganan CSV yang lebih baik
+        df = pd.read_csv(url, sep=',', on_bad_lines='skip', encoding='utf-8')
         df.fillna('', inplace=True)
         required_columns = ['Title', 'Description', 'Genre', 'Status', 'Volume', 'Favorites', 'Views', 'Score', 'Tags']
         for col in required_columns:
@@ -160,7 +162,3 @@ elif page == "Rekomendasi (Genre)":
             st.dataframe(recommendations[['Title', 'Genre', 'Score']])
         else:
             st.warning(f"Tidak ada novel dengan genre '{selected_genre}' atau tidak ada rekomendasi.")
-
-# Note: Halaman "Distribusi Data" dan "Confusion Matrix" telah dihapus sesuai permintaan terakhir.
-# Jika Anda ingin menambahkannya kembali, Anda bisa membuat halaman Streamlit terpisah
-# dengan plot matplotlib/seaborn yang disimpan ke BytesIO dan ditampilkan menggunakan st.image().
