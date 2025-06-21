@@ -2,7 +2,7 @@ import pandas as pd
 from flask import Flask, render_template, request, session, redirect, url_for
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix # Meskipun dihapus fiturnya, import ini masih ada di model_pelatihan.py
 import pickle
 import os
 import matplotlib.pyplot as plt
@@ -167,66 +167,9 @@ def recommend_by_genre():
                            selected_genre=selected_genre,
                            message=message)
 
-# Halaman distribusi data dihapus karena tidak disebutkan di permintaan terakhir
-# @app.route('/data_distribution')
-# def data_distribution():
-#     # ... (kode untuk distribusi data, jika diperlukan di masa depan)
-#     pass
-
-@app.route('/confusion_matrix')
-def show_confusion_matrix():
-    """Halaman untuk menampilkan Confusion Matrix dan akurasi."""
-    try:
-        # Menggunakan kolom 'Genre' sebagai target
-        novels_df['target_genre'] = novels_df['Genre'].apply(lambda x: x.split(',')[0].strip() if x else 'Unknown')
-        
-        # Hapus baris dengan 'Unknown' genre jika ini tidak diinginkan
-        df_for_cm = novels_df[novels_df['target_genre'] != 'Unknown'].copy()
-
-        if df_for_cm.empty:
-            cm_plot = None
-            accuracy = "Tidak ada data yang valid untuk membuat Confusion Matrix setelah preprocessing genre."
-            print("Tidak ada data yang valid untuk membuat Confusion Matrix setelah preprocessing genre.")
-            return render_template('confusion_matrix.html', cm_plot=cm_plot, accuracy=accuracy)
-
-        # Pastikan tfidf_matrix sudah diinisialisasi
-        # Untuk tujuan ini, kita perlu tfidf_vectorizer untuk mentransformasi data yang digunakan untuk CM
-        X_sample = tfidf_vectorizer.transform(df_for_cm['combined_features'])
-        y_true_sample = df_for_cm['target_genre']
-
-        # Pastikan model sudah dilatih dan bisa memprediksi
-        if model:
-            y_pred_sample = model.predict(X_sample)
-            
-            # Filter hanya label yang ada di y_true_sample dan y_pred_sample
-            unique_labels = np.unique(np.concatenate((y_true_sample, y_pred_sample)))
-            
-            # Hitung akurasi
-            accuracy = np.mean(y_pred_sample == y_true_sample) * 100
-            
-            # Buat Confusion Matrix
-            cm = confusion_matrix(y_true_sample, y_pred_sample, labels=unique_labels)
-            
-            plt.figure(figsize=(10, 8))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=unique_labels, yticklabels=unique_labels)
-            plt.title('Confusion Matrix Prediksi Genre')
-            plt.xlabel('Prediksi')
-            plt.ylabel('Aktual')
-            plt.tight_layout()
-            buf = BytesIO()
-            plt.savefig(buf, format='png')
-            plt.close()
-            cm_plot = base64.b64encode(buf.getvalue()).decode('utf-8')
-        else:
-            cm_plot = None
-            accuracy = "Model belum dilatih atau dimuat."
-
-    except Exception as e:
-        cm_plot = None
-        accuracy = f"Error saat membuat Confusion Matrix: {e}"
-        print(f"Error saat membuat Confusion Matrix: {e}")
-
-    return render_template('confusion_matrix.html', cm_plot=cm_plot, accuracy=accuracy)
+# Halaman distribusi data dan confusion matrix telah dihapus dari aplikasi.
+# Jika Anda ingin menambahkan kembali salah satunya di masa depan,
+# Anda bisa mengembalikan kode yang relevan dan menambahkan link navigasi.
 
 if __name__ == '__main__':
     app.run(debug=True)
