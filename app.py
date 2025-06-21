@@ -27,18 +27,26 @@ def load_data(url):
     try:
         # Menambahkan on_bad_lines='skip' untuk melewati baris yang rusak
         # Menambahkan sep=',' dan encoding='utf-8' untuk penanganan CSV yang lebih baik
+        # Memastikan nama kolom 'title' (huruf kecil) yang benar
         df = pd.read_csv(url, sep=',', on_bad_lines='skip', encoding='utf-8')
         df.fillna('', inplace=True)
-        # Mengganti 'Title' dengan 'Judul'
-        required_columns = ['Judul', 'Description', 'Genre', 'Status', 'Volume', 'Favorites', 'Views', 'Score', 'Tags']
+        # Mengganti 'Judul' dengan 'title' (huruf kecil)
+        required_columns = ['title', 'synopsis', 'genres', 'status', 'n_volumes', 'favorites', 'views', 'score']
         for col in required_columns:
             if col not in df.columns:
                 st.error(f"Kolom '{col}' tidak ditemukan dalam dataset dari GitHub. Pastikan nama kolom sesuai. Kolom yang ada: {df.columns.tolist()}")
                 st.stop() # Menghentikan eksekusi aplikasi jika kolom penting hilang
         
-        # Pastikan 'Views' dan 'Score' adalah numerik
-        df['Views'] = pd.to_numeric(df['Views'], errors='coerce').fillna(0)
-        df['Score'] = pd.to_numeric(df['Score'], errors='coerce').fillna(0)
+        # Pastikan 'views' dan 'score' adalah numerik
+        df['views'] = pd.to_numeric(df['views'], errors='coerce').fillna(0)
+        df['score'] = pd.to_numeric(df['score'], errors='coerce').fillna(0)
+        # Mengganti 'Title' menjadi 'Judul' untuk tampilan yang lebih baik di UI
+        df.rename(columns={'title': 'Judul', 'synopsis': 'Description', 'genres': 'Genre',
+                           'status': 'Status', 'n_volumes': 'Volume', 'favorites': 'Favorites',
+                           'views': 'Views', 'score': 'Score'}, inplace=True)
+        # Menambahkan kolom 'Tags' jika tidak ada (meskipun tidak ada di CSV yang Anda berikan, ini penting untuk TFIDF jika ada)
+        if 'Tags' not in df.columns:
+            df['Tags'] = '' # Mengisi dengan string kosong jika tidak ada
         return df
     except Exception as e:
         st.error(f"Error saat memuat atau memproses novels.csv dari GitHub: {e}")
@@ -66,10 +74,11 @@ novels_df = load_data(DATA_URL)
 model, tfidf_vectorizer = load_model_and_vectorizer()
 
 # Siapkan fitur gabungan untuk TF-IDF dan matriks TF-IDF
-# Mengganti 'Title' dengan 'Judul'
+# Menggunakan 'Judul' setelah rename, dan kolom lain yang relevan
 tfidf_columns = ['Judul', 'Description', 'Genre', 'Tags']
 novels_df['combined_features'] = novels_df[tfidf_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
 tfidf_matrix = tfidf_vectorizer.transform(novels_df['combined_features'])
+
 
 # Inisialisasi riwayat pencarian di Streamlit's session state
 if 'search_history' not in st.session_state:
@@ -79,11 +88,11 @@ def get_recommendations_content_based(novel_title, top_n=10):
     """
     Memberikan rekomendasi novel berdasarkan kemiripan konten.
     """
-    # Mengganti 'Title' dengan 'Judul'
+    # Menggunakan 'Judul'
     if novel_title not in novels_df['Judul'].values:
         return pd.DataFrame()
 
-    # Mengganti 'Title' dengan 'Judul'
+    # Menggunakan 'Judul'
     idx = novels_df[novels_df['Judul'] == novel_title].index[0]
     novel_features = tfidf_matrix[idx]
 
@@ -93,7 +102,7 @@ def get_recommendations_content_based(novel_title, top_n=10):
     similar_novels = novels_df.iloc[similar_indices].copy()
     similar_novels['Similarity_Score'] = cosine_similarities[similar_indices]
     
-    # Mengganti 'Title' dengan 'Judul'
+    # Menggunakan 'Judul'
     similar_novels = similar_novels[similar_novels['Judul'] != novel_title]
     
     return similar_novels.head(top_n)
@@ -118,7 +127,7 @@ if page == "Beranda":
         st.header("10 Novel Terpopuler")
         top_novels = novels_df.sort_values(by='Views', ascending=False).head(10)
         if not top_novels.empty:
-            # Mengganti 'Title' dengan 'Judul' untuk tampilan
+            # Menggunakan 'Judul' untuk tampilan
             st.dataframe(top_novels[['Judul', 'Genre', 'Views']].style.format({"Views": "{:,.0f}"}))
         else:
             st.info("Tidak ada novel terpopuler untuk ditampilkan.")
@@ -134,7 +143,7 @@ if page == "Beranda":
 elif page == "Rekomendasi (Novel)":
     st.title("Rekomendasi Berdasarkan Novel")
 
-    # Mengganti 'Title' dengan 'Judul'
+    # Menggunakan 'Judul'
     novel_titles = sorted(novels_df['Judul'].tolist())
     selected_novel_title = st.selectbox("Pilih Novel:", ['-- Pilih Novel --'] + novel_titles)
 
@@ -144,7 +153,7 @@ elif page == "Rekomendasi (Novel)":
         
         if not recommendations.empty:
             st.subheader(f"Rekomendasi untuk '{selected_novel_title}'")
-            # Mengganti 'Title' dengan 'Judul' untuk tampilan
+            # Menggunakan 'Judul' untuk tampilan
             st.dataframe(recommendations[['Judul', 'Genre', 'Score', 'Similarity_Score']].style.format({"Similarity_Score": "{:.4f}"}))
         else:
             st.warning(f"Novel '{selected_novel_title}' tidak ditemukan atau tidak ada rekomendasi.")
@@ -167,7 +176,7 @@ elif page == "Rekomendasi (Genre)":
         
         if not recommendations.empty:
             st.subheader(f"Rekomendasi Novel Genre '{selected_genre}'")
-            # Mengganti 'Title' dengan 'Judul' untuk tampilan
+            # Menggunakan 'Judul' untuk tampilan
             st.dataframe(recommendations[['Judul', 'Genre', 'Score']])
         else:
             st.warning(f"Tidak ada novel dengan genre '{selected_genre}' atau tidak ada rekomendasi.")
