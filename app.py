@@ -16,7 +16,7 @@ st.set_page_config(layout="wide", page_title="Novel Recommendation App")
 def load_data():
     try:
         # Menggunakan raw link dari GitHub untuk novels.csv
-        data_url = "https://raw.githubusercontent.com/Yudistira479/novel/main/novels.csv"
+        data_url = "https://github.com/Yudistira479/novel/blob/main/novels.csv"
         df = pd.read_csv(data_url)
 
         # Mengisi nilai NaN di kolom 'genres', 'description', 'author'
