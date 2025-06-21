@@ -24,7 +24,7 @@ try:
     novels_df = pd.read_csv(DATA_PATH)
     novels_df.fillna('', inplace=True) # Mengisi nilai NaN dengan string kosong
     # Pastikan kolom yang dibutuhkan ada
-    required_columns = ['Title', 'Description', 'Genre', 'Status', 'Volume', 'Favorites', 'Views', 'Score']
+    required_columns = ['Title', 'Description', 'Genre', 'Status', 'Volume', 'Favorites', 'Views', 'Score', 'Tags']
     for col in required_columns:
         if col not in novels_df.columns:
             raise ValueError(f"Kolom '{col}' tidak ditemukan dalam novels.csv. Pastikan nama kolom sesuai.")
@@ -74,16 +74,17 @@ def get_recommendations_content_based(novel_title, top_n=10):
     # Hitung kemiripan kosinus antara novel yang dipilih dan semua novel lainnya
     # tfidf_matrix sudah dihitung di awal, jadi kita bisa langsung menggunakannya
     cosine_similarities = (tfidf_matrix * novel_features.T).toarray().flatten()
-    similar_indices = cosine_similarities.argsort()[:-top_n-1:-1]
     
-    # Filter novel yang sama
+    # Dapatkan indeks novel yang paling mirip (termasuk novel itu sendiri)
+    similar_indices = cosine_similarities.argsort()[::-1]
+    
+    # Filter novel yang sama dan ambil top_n
     similar_novels = novels_df.iloc[similar_indices].copy()
+    similar_novels['Similarity_Score'] = cosine_similarities[similar_indices]
+    
     similar_novels = similar_novels[similar_novels['Title'] != novel_title]
     
-    # Tambahkan kolom kemiripan untuk ditampilkan
-    similar_novels['Similarity_Score'] = np.sort(cosine_similarities)[:-top_n-1:-1][1:] # Lewati skor novel itu sendiri
-
-    return similar_novels
+    return similar_novels.head(top_n)
 
 def add_to_history(query):
     """Menambahkan query ke riwayat pencarian."""
@@ -95,6 +96,8 @@ def add_to_history(query):
 @app.route('/')
 def home():
     """Halaman utama: Menampilkan 10 novel terpopuler dan riwayat pencarian."""
+    # Pastikan 'Views' adalah numerik dan isi NaN dengan 0 untuk pengurutan
+    novels_df['Views'] = pd.to_numeric(novels_df['Views'], errors='coerce').fillna(0)
     top_novels = novels_df.sort_values(by='Views', ascending=False).head(10)
     
     # Ambil riwayat pencarian dari session
@@ -120,11 +123,11 @@ def recommend_by_score():
         else:
             message = "Silakan pilih novel."
     else:
-        message = "Pilih novel untuk mendapatkan rekomendasi berdasarkan skor."
+        message = "Pilih novel untuk mendapatkan rekomendasi berdasarkan novel yang dipilih."
 
     return render_template('recommend_by_score.html', 
-                           novels=novels_df[['Title', 'Genre', 'Score']], 
-                           recommendations=recommendations,
+                           novels=novels_df[['Title', 'Genre', 'Score']].sort_values(by='Title').to_dict('records'), 
+                           recommendations=recommendations.to_dict('records'),
                            selected_novel=selected_novel_title,
                            message=message)
 
@@ -151,14 +154,18 @@ def recommend_by_genre():
     else:
         message = "Pilih genre untuk mendapatkan rekomendasi."
 
-    genres = sorted(novels_df['Genre'].explode().unique().tolist()) # Ambil daftar genre unik
-    # Membersihkan string genre jika ada spasi ekstra atau karakter tak diinginkan
-    genres = [g.strip() for g in genres if g.strip()]
-    genres = sorted(list(set(genres))) # Hapus duplikat dan urutkan
+    # Mengambil daftar genre unik dari kolom 'Genre'
+    # Asumsikan 'Genre' bisa berisi string tunggal atau string yang dipisahkan koma
+    all_genres = set()
+    for genre_list in novels_df['Genre'].dropna().unique():
+        for g in genre_list.split(','):
+            all_genres.add(g.strip())
+    
+    genres = sorted(list(all_genres)) # Hapus duplikat dan urutkan
     
     return render_template('recommend_by_genre.html', 
                            genres=genres, 
-                           recommendations=recommendations,
+                           recommendations=recommendations.to_dict('records'),
                            selected_genre=selected_genre,
                            message=message)
 
@@ -169,7 +176,9 @@ def data_distribution():
 
     # Distribusi Genre
     plt.figure(figsize=(12, 6))
-    genre_counts = novels_df['Genre'].value_counts().head(15) # Ambil 15 genre teratas
+    # Explode the 'Genre' column and count occurrences for more accurate distribution
+    all_genres_exploded = novels_df['Genre'].dropna().str.split(',').explode()
+    genre_counts = all_genres_exploded.str.strip().value_counts().head(15) # Ambil 15 genre teratas
     sns.barplot(x=genre_counts.index, y=genre_counts.values, palette='viridis')
     plt.title('Distribusi Genre Novel (Top 15)')
     plt.xlabel('Genre')
@@ -195,9 +204,10 @@ def data_distribution():
     plots['status'] = base64.b64encode(buf.getvalue()).decode('utf-8')
 
     # Distribusi Volume (jika ada kolom Volume numerik)
-    if 'Volume' in novels_df.columns and pd.api.types.is_numeric_dtype(novels_df['Volume']):
+    novels_df['Volume'] = pd.to_numeric(novels_df['Volume'], errors='coerce')
+    if 'Volume' in novels_df.columns and novels_df['Volume'].notna().any():
         plt.figure(figsize=(10, 6))
-        sns.histplot(novels_df['Volume'], bins=20, kde=True, color='purple')
+        sns.histplot(novels_df['Volume'].dropna(), bins=20, kde=True, color='purple')
         plt.title('Distribusi Volume Novel')
         plt.xlabel('Volume')
         plt.ylabel('Jumlah Novel')
@@ -210,9 +220,10 @@ def data_distribution():
         plots['volume'] = None # Tidak membuat plot jika Volume bukan numerik
 
     # Distribusi Favorites
-    if 'Favorites' in novels_df.columns and pd.api.types.is_numeric_dtype(novels_df['Favorites']):
+    novels_df['Favorites'] = pd.to_numeric(novels_df['Favorites'], errors='coerce')
+    if 'Favorites' in novels_df.columns and novels_df['Favorites'].notna().any():
         plt.figure(figsize=(10, 6))
-        sns.histplot(novels_df['Favorites'], bins=20, kde=True, color='teal')
+        sns.histplot(novels_df['Favorites'].dropna(), bins=20, kde=True, color='teal')
         plt.title('Distribusi Jumlah Favorites')
         plt.xlabel('Jumlah Favorites')
         plt.ylabel('Jumlah Novel')
@@ -234,40 +245,38 @@ def show_confusion_matrix():
         # Untuk demo ini, kita akan membuat prediksi dummy jika tidak ada data asli
         # Di aplikasi nyata, Anda akan memiliki set data uji yang terpisah
         
-        # Contoh dummy data untuk Confusion Matrix
-        # Diasumsikan kita memiliki kolom 'Genre' sebagai target
-        
-        # Mengambil sampel data untuk prediksi
-        # Jika Anda memiliki data pelatihan/pengujian yang disimpan, gunakan itu.
-        # Untuk tujuan demo, kita akan membuat prediksi pada subset data.
-        
         # Menggunakan kolom 'Genre' sebagai target
         novels_df['target_genre'] = novels_df['Genre'].apply(lambda x: x.split(',')[0].strip() if x else 'Unknown')
         
-        # Kita perlu memastikan target_genre adalah kategori yang bisa diprediksi
-        # Untuk kesederhanaan, kita akan menggunakan sebagian kecil data
-        sample_df = novels_df.sample(frac=0.3, random_state=42) # Ambil 30% data sebagai sampel
-        
-        # Pastikan tfidf_matrix sudah diinisialisasi
-        if 'tfidf_matrix' not in globals():
-            novels_df['combined_features'] = novels_df[tfidf_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
-            tfidf_matrix = tfidf_vectorizer.transform(novels_df['combined_features'])
+        # Hapus baris dengan 'Unknown' genre jika ini tidak diinginkan
+        df_for_cm = novels_df[novels_df['target_genre'] != 'Unknown'].copy()
 
-        X_sample = tfidf_vectorizer.transform(sample_df['combined_features'])
-        y_true_sample = sample_df['target_genre']
+        if df_for_cm.empty:
+            cm_plot = None
+            accuracy = "Tidak ada data yang valid untuk membuat Confusion Matrix setelah preprocessing genre."
+            print("Tidak ada data yang valid untuk membuat Confusion Matrix setelah preprocessing genre.")
+            return render_template('confusion_matrix.html', cm_plot=cm_plot, accuracy=accuracy)
+
+        # Pastikan tfidf_matrix sudah diinisialisasi
+        # Untuk tujuan ini, kita perlu tfidf_vectorizer untuk mentransformasi data yang digunakan untuk CM
+        X_sample = tfidf_vectorizer.transform(df_for_cm['combined_features'])
+        y_true_sample = df_for_cm['target_genre']
 
         # Pastikan model sudah dilatih dan bisa memprediksi
         if model:
             y_pred_sample = model.predict(X_sample)
             
+            # Filter hanya label yang ada di y_true_sample dan y_pred_sample
+            unique_labels = np.unique(np.concatenate((y_true_sample, y_pred_sample)))
+            
             # Hitung akurasi
             accuracy = np.mean(y_pred_sample == y_true_sample) * 100
             
             # Buat Confusion Matrix
-            cm = confusion_matrix(y_true_sample, y_pred_sample, labels=model.classes_)
+            cm = confusion_matrix(y_true_sample, y_pred_sample, labels=unique_labels)
             
             plt.figure(figsize=(10, 8))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=model.classes_, yticklabels=model.classes_)
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=unique_labels, yticklabels=unique_labels)
             plt.title('Confusion Matrix Prediksi Genre')
             plt.xlabel('Prediksi')
             plt.ylabel('Aktual')
