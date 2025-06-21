@@ -30,23 +30,26 @@ def load_data(url):
         # Memastikan nama kolom 'title' (huruf kecil) yang benar
         df = pd.read_csv(url, sep=',', on_bad_lines='skip', encoding='utf-8')
         df.fillna('', inplace=True)
-        # Mengganti 'Judul' dengan 'title' (huruf kecil)
-        required_columns = ['title', 'synopsis', 'genres', 'status', 'n_volumes', 'favorites', 'views', 'score']
+        # Mengganti 'synopsis' dan 'genres' untuk konsistensi dengan logika aplikasi
+        # Menghapus 'views' dari required_columns
+        required_columns = ['title', 'synopsis', 'genres', 'status', 'n_volumes', 'favorites', 'score']
         for col in required_columns:
             if col not in df.columns:
                 st.error(f"Kolom '{col}' tidak ditemukan dalam dataset dari GitHub. Pastikan nama kolom sesuai. Kolom yang ada: {df.columns.tolist()}")
                 st.stop() # Menghentikan eksekusi aplikasi jika kolom penting hilang
         
-        # Pastikan 'views' dan 'score' adalah numerik
-        df['views'] = pd.to_numeric(df['views'], errors='coerce').fillna(0)
+        # Pastikan 'score' adalah numerik
         df['score'] = pd.to_numeric(df['score'], errors='coerce').fillna(0)
-        # Mengganti 'Title' menjadi 'Judul' untuk tampilan yang lebih baik di UI
+        
+        # Melakukan rename kolom untuk penggunaan yang lebih mudah di seluruh aplikasi
         df.rename(columns={'title': 'Judul', 'synopsis': 'Description', 'genres': 'Genre',
                            'status': 'Status', 'n_volumes': 'Volume', 'favorites': 'Favorites',
-                           'views': 'Views', 'score': 'Score'}, inplace=True)
-        # Menambahkan kolom 'Tags' jika tidak ada (meskipun tidak ada di CSV yang Anda berikan, ini penting untuk TFIDF jika ada)
+                           'score': 'Score'}, inplace=True)
+        
+        # Tambahkan kolom 'Tags' jika tidak ada (penting untuk TFIDF jika ada)
         if 'Tags' not in df.columns:
             df['Tags'] = '' # Mengisi dengan string kosong jika tidak ada
+
         return df
     except Exception as e:
         st.error(f"Error saat memuat atau memproses novels.csv dari GitHub: {e}")
@@ -124,11 +127,12 @@ if page == "Beranda":
     col1, col2 = st.columns(2)
 
     with col1:
-        st.header("10 Novel Terpopuler")
-        top_novels = novels_df.sort_values(by='Views', ascending=False).head(10)
+        st.header("10 Novel Terpopuler (Berdasarkan Score)")
+        # Mengganti pengurutan dari 'Views' ke 'Score'
+        top_novels = novels_df.sort_values(by='Score', ascending=False).head(10)
         if not top_novels.empty:
-            # Menggunakan 'Judul' untuk tampilan
-            st.dataframe(top_novels[['Judul', 'Genre', 'Views']].style.format({"Views": "{:,.0f}"}))
+            # Hanya menampilkan Judul dan Genre
+            st.dataframe(top_novels[['Judul', 'Genre', 'Score']])
         else:
             st.info("Tidak ada novel terpopuler untuk ditampilkan.")
 
@@ -169,7 +173,7 @@ elif page == "Rekomendasi (Genre)":
     
     selected_genre = st.selectbox("Pilih Genre:", ['-- Pilih Genre --'] + genres)
 
-    if selected_genre and selected_genre != '-- Pilih Genre --':
+    if selected_genre and selected_genre != '-- Pilih Novel --':
         add_to_history(selected_genre)
         genre_novels = novels_df[novels_df['Genre'].str.contains(selected_genre, case=False, na=False)].sort_values(by='Score', ascending=False)
         recommendations = genre_novels.head(10)
