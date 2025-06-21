@@ -17,7 +17,7 @@ st.set_page_config(
 # --- Path dan URL ---
 MODEL_PATH = 'model_pelatihan.pkl'
 VECTORIZER_PATH = 'tfidf.pkl' # Pastikan nama file ini sesuai di GitHub Anda
-DATA_URL = 'https://raw.githubusercontent.com/Yudistira479/novel/main/novels.csv'
+DATA_URL = 'https://github.com/Yudistira479/novel/blob/main/novels.csv'
 # Atau, jika Anda menggunakan file lokal sebagai workaround:
 # DATA_PATH = 'novels.csv' 
 
