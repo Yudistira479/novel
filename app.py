@@ -17,22 +17,20 @@ app.secret_key = 'your_secret_key_here' # Ganti dengan kunci rahasia yang kuat
 # Path untuk menyimpan model dan vectorizer
 MODEL_PATH = 'model_pelatihan.pkl'
 VECTORIZER_PATH = 'tfidf_vectorizer.pkl'
-DATA_PATH = 'novels.csv'
+# URL dataset novel dari GitHub
+DATA_URL = 'https://raw.githubusercontent.com/Yudistira479/novel/main/novels.csv'
 
-# Muat dataset novel
+# Muat dataset novel dari URL GitHub
 try:
-    novels_df = pd.read_csv(DATA_PATH)
+    novels_df = pd.read_csv(DATA_URL)
     novels_df.fillna('', inplace=True) # Mengisi nilai NaN dengan string kosong
     # Pastikan kolom yang dibutuhkan ada
     required_columns = ['Title', 'Description', 'Genre', 'Status', 'Volume', 'Favorites', 'Views', 'Score', 'Tags']
     for col in required_columns:
         if col not in novels_df.columns:
-            raise ValueError(f"Kolom '{col}' tidak ditemukan dalam novels.csv. Pastikan nama kolom sesuai.")
-except FileNotFoundError:
-    print(f"Error: File '{DATA_PATH}' tidak ditemukan. Pastikan file berada di direktori yang sama dengan app.py.")
-    exit()
+            raise ValueError(f"Kolom '{col}' tidak ditemukan dalam dataset dari GitHub. Pastikan nama kolom sesuai.")
 except Exception as e:
-    print(f"Error saat memuat atau memproses novels.csv: {e}")
+    print(f"Error saat memuat atau memproses novels.csv dari GitHub: {e}")
     exit()
 
 # Cek apakah model dan vectorizer sudah ada, jika tidak, arahkan untuk melatihnya
@@ -169,82 +167,16 @@ def recommend_by_genre():
                            selected_genre=selected_genre,
                            message=message)
 
-@app.route('/data_distribution')
-def data_distribution():
-    """Halaman untuk menampilkan distribusi data."""
-    plots = {}
-
-    # Distribusi Genre
-    plt.figure(figsize=(12, 6))
-    # Explode the 'Genre' column and count occurrences for more accurate distribution
-    all_genres_exploded = novels_df['Genre'].dropna().str.split(',').explode()
-    genre_counts = all_genres_exploded.str.strip().value_counts().head(15) # Ambil 15 genre teratas
-    sns.barplot(x=genre_counts.index, y=genre_counts.values, palette='viridis')
-    plt.title('Distribusi Genre Novel (Top 15)')
-    plt.xlabel('Genre')
-    plt.ylabel('Jumlah Novel')
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    buf = BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close()
-    plots['genre'] = base64.b64encode(buf.getvalue()).decode('utf-8')
-
-    # Distribusi Status
-    plt.figure(figsize=(8, 5))
-    status_counts = novels_df['Status'].value_counts()
-    sns.barplot(x=status_counts.index, y=status_counts.values, palette='magma')
-    plt.title('Distribusi Status Novel')
-    plt.xlabel('Status')
-    plt.ylabel('Jumlah Novel')
-    plt.tight_layout()
-    buf = BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close()
-    plots['status'] = base64.b64encode(buf.getvalue()).decode('utf-8')
-
-    # Distribusi Volume (jika ada kolom Volume numerik)
-    novels_df['Volume'] = pd.to_numeric(novels_df['Volume'], errors='coerce')
-    if 'Volume' in novels_df.columns and novels_df['Volume'].notna().any():
-        plt.figure(figsize=(10, 6))
-        sns.histplot(novels_df['Volume'].dropna(), bins=20, kde=True, color='purple')
-        plt.title('Distribusi Volume Novel')
-        plt.xlabel('Volume')
-        plt.ylabel('Jumlah Novel')
-        plt.tight_layout()
-        buf = BytesIO()
-        plt.savefig(buf, format='png')
-        plt.close()
-        plots['volume'] = base64.b64encode(buf.getvalue()).decode('utf-8')
-    else:
-        plots['volume'] = None # Tidak membuat plot jika Volume bukan numerik
-
-    # Distribusi Favorites
-    novels_df['Favorites'] = pd.to_numeric(novels_df['Favorites'], errors='coerce')
-    if 'Favorites' in novels_df.columns and novels_df['Favorites'].notna().any():
-        plt.figure(figsize=(10, 6))
-        sns.histplot(novels_df['Favorites'].dropna(), bins=20, kde=True, color='teal')
-        plt.title('Distribusi Jumlah Favorites')
-        plt.xlabel('Jumlah Favorites')
-        plt.ylabel('Jumlah Novel')
-        plt.tight_layout()
-        buf = BytesIO()
-        plt.savefig(buf, format='png')
-        plt.close()
-        plots['favorites'] = base64.b64encode(buf.getvalue()).decode('utf-8')
-    else:
-        plots['favorites'] = None # Tidak membuat plot jika Favorites bukan numerik
-
-    return render_template('data_distribution.html', plots=plots)
+# Halaman distribusi data dihapus karena tidak disebutkan di permintaan terakhir
+# @app.route('/data_distribution')
+# def data_distribution():
+#     # ... (kode untuk distribusi data, jika diperlukan di masa depan)
+#     pass
 
 @app.route('/confusion_matrix')
 def show_confusion_matrix():
     """Halaman untuk menampilkan Confusion Matrix dan akurasi."""
     try:
-        # Load data pelatihan (ini harusnya dari model_pelatihan.py)
-        # Untuk demo ini, kita akan membuat prediksi dummy jika tidak ada data asli
-        # Di aplikasi nyata, Anda akan memiliki set data uji yang terpisah
-        
         # Menggunakan kolom 'Genre' sebagai target
         novels_df['target_genre'] = novels_df['Genre'].apply(lambda x: x.split(',')[0].strip() if x else 'Unknown')
         
