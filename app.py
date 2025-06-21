@@ -17,7 +17,7 @@ st.set_page_config(
 # --- Path dan URL ---
 MODEL_PATH = 'model_pelatihan.pkl'
 VECTORIZER_PATH = 'tfidf.pkl' # Pastikan nama file ini sesuai di GitHub Anda
-DATA_URL = 'https://github.com/Yudistira479/novel/blob/main/novels.csv'
+DATA_URL = 'https://raw.githubusercontent.com/Yudistira479/novel/main/novels.csv'
 # Atau, jika Anda menggunakan file lokal sebagai workaround:
 # DATA_PATH = 'novels.csv' 
 
@@ -49,20 +49,12 @@ def load_data(source):
         # Pastikan 'score' adalah numerik
         df['score'] = pd.to_numeric(df['score'], errors='coerce').fillna(0)
         
-        # Melakukan rename kolom untuk penggunaan yang lebih mudah di seluruh aplikasi
-        df.rename(columns={
-            'title': 'Judul', 
-            'synopsis': 'Description', 
-            'genres': 'Genre',
-            'status': 'Status', 
-            'n_volumes': 'Volume', 
-            'favorites': 'Favorites',
-            'score': 'Score'
-        }, inplace=True)
+        # --- Bagian Rename Dihapus ---
+        # df.rename(columns={...}, inplace=True)
         
-        # Tambahkan kolom 'Tags' jika tidak ada di dataset asli
-        if 'Tags' not in df.columns:
-            df['Tags'] = '' 
+        # --- Kolom 'Tags' tidak lagi digunakan, jadi tidak perlu ditambahkan jika tidak ada ---
+        # if 'Tags' not in df.columns:
+        #     df['Tags'] = '' 
 
         return df
     except Exception as e:
@@ -92,7 +84,8 @@ novels_df = load_data(DATA_URL) # Ganti ke DATA_PATH jika Anda meletakkan file s
 model, tfidf_vectorizer = load_model_and_vectorizer()
 
 # Siapkan fitur gabungan untuk TF-IDF dan matriks TF-IDF
-tfidf_columns = ['Judul', 'Description', 'Genre', 'Tags']
+# Kolom 'Tags' tidak lagi digunakan dalam tfidf_columns
+tfidf_columns = ['title', 'synopsis', 'genres']
 novels_df['combined_features'] = novels_df[tfidf_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
 tfidf_matrix = tfidf_vectorizer.transform(novels_df['combined_features'])
 
@@ -105,10 +98,12 @@ def get_recommendations_content_based(novel_title, top_n=10):
     """
     Memberikan rekomendasi novel berdasarkan kemiripan konten.
     """
-    if novel_title not in novels_df['Judul'].values:
+    # Menggunakan nama kolom asli: 'title'
+    if novel_title not in novels_df['title'].values:
         return pd.DataFrame()
 
-    idx = novels_df[novels_df['Judul'] == novel_title].index[0]
+    # Menggunakan nama kolom asli: 'title'
+    idx = novels_df[novels_df['title'] == novel_title].index[0]
     novel_features = tfidf_matrix[idx]
 
     cosine_similarities = (tfidf_matrix * novel_features.T).toarray().flatten()
@@ -117,7 +112,8 @@ def get_recommendations_content_based(novel_title, top_n=10):
     similar_novels = novels_df.iloc[similar_indices].copy()
     similar_novels['Similarity_Score'] = cosine_similarities[similar_indices]
     
-    similar_novels = similar_novels[similar_novels['Judul'] != novel_title]
+    # Menggunakan nama kolom asli: 'title'
+    similar_novels = similar_novels[similar_novels['title'] != novel_title]
     
     return similar_novels.head(top_n)
 
@@ -139,9 +135,11 @@ if page == "Beranda":
 
     with col1:
         st.header("10 Novel Terpopuler (Berdasarkan Score)")
-        top_novels = novels_df.sort_values(by='Score', ascending=False).head(10)
+        # Menggunakan nama kolom asli: 'score'
+        top_novels = novels_df.sort_values(by='score', ascending=False).head(10)
         if not top_novels.empty:
-            st.dataframe(top_novels[['Judul', 'Genre', 'Score']])
+            # Menggunakan nama kolom asli: 'title', 'genres', 'score'
+            st.dataframe(top_novels[['title', 'genres', 'score']])
         else:
             st.info("Tidak ada novel terpopuler untuk ditampilkan.")
 
@@ -156,7 +154,8 @@ if page == "Beranda":
 elif page == "Rekomendasi (Novel)":
     st.title("Rekomendasi Berdasarkan Novel")
 
-    novel_titles = sorted(novels_df['Judul'].tolist())
+    # Menggunakan nama kolom asli: 'title'
+    novel_titles = sorted(novels_df['title'].tolist())
     selected_novel_title = st.selectbox("Pilih Novel:", ['-- Pilih Novel --'] + novel_titles)
 
     if selected_novel_title and selected_novel_title != '-- Pilih Novel --':
@@ -165,7 +164,8 @@ elif page == "Rekomendasi (Novel)":
         
         if not recommendations.empty:
             st.subheader(f"Rekomendasi untuk '{selected_novel_title}'")
-            st.dataframe(recommendations[['Judul', 'Genre', 'Score', 'Similarity_Score']].style.format({"Similarity_Score": "{:.4f}"}))
+            # Menggunakan nama kolom asli: 'title', 'genres', 'score'
+            st.dataframe(recommendations[['title', 'genres', 'score', 'Similarity_Score']].style.format({"Similarity_Score": "{:.4f}"}))
         else:
             st.warning(f"Novel '{selected_novel_title}' tidak ditemukan atau tidak ada rekomendasi.")
 
@@ -173,20 +173,23 @@ elif page == "Rekomendasi (Genre)":
     st.title("Rekomendasi Berdasarkan Genre")
 
     all_genres = set()
-    for genre_list in novels_df['Genre'].dropna().unique():
+    # Menggunakan nama kolom asli: 'genres'
+    for genre_list in novels_df['genres'].dropna().unique():
         for g in genre_list.split(','):
             all_genres.add(g.strip())
     genres = sorted(list(all_genres))
     
-    selected_genre = st.selectbox("Pilih Genre:", ['-- Pilih Genre --'] + genres)
+    selected_genre = st.selectbox("Pilih Genre:", ['-- Pilih Novel --'] + genres)
 
     if selected_genre and selected_genre != '-- Pilih Novel --':
         add_to_history(selected_genre)
-        genre_novels = novels_df[novels_df['Genre'].str.contains(selected_genre, case=False, na=False)].sort_values(by='Score', ascending=False)
+        # Menggunakan nama kolom asli: 'genres', 'score'
+        genre_novels = novels_df[novels_df['genres'].str.contains(selected_genre, case=False, na=False)].sort_values(by='score', ascending=False)
         recommendations = genre_novels.head(10)
         
         if not recommendations.empty:
             st.subheader(f"Rekomendasi Novel Genre '{selected_genre}'")
-            st.dataframe(recommendations[['Judul', 'Genre', 'Score']])
+            # Menggunakan nama kolom asli: 'title', 'genres', 'score'
+            st.dataframe(recommendations[['title', 'genres', 'score']])
         else:
             st.warning(f"Tidak ada novel dengan genre '{selected_genre}' atau tidak ada rekomendasi.")
