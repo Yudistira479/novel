@@ -18,7 +18,7 @@ st.set_page_config(
 MODEL_PATH = 'model_pelatihan.pkl'
 # Memperbarui VECTORIZER_PATH ke 'tfidf.pkl'
 VECTORIZER_PATH = 'tfidf.pkl' 
-DATA_URL = 'https://github.com/Yudistira479/novel/tree/main'
+DATA_URL = 'https://github.com/Yudistira479/novel/blob/main/novels.csv'
 
 # --- Fungsi Pemuatan Data dan Model (dengan caching untuk performa) ---
 
