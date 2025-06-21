@@ -19,9 +19,9 @@ def load_data():
         data_url = "https://raw.githubusercontent.com/Yudistira479/novel/main/novels.csv"
         df = pd.read_csv(data_url)
 
-        # Mengisi nilai NaN di kolom 'genre', 'description', 'author'
+        # Mengisi nilai NaN di kolom 'genres', 'description', 'author'
         # Penting untuk mengisi NaN sebelum menggabungkan teks
-        df['genre'] = df['genre'].fillna('')
+        df['genres'] = df['genres'].fillna('')
         df['description'] = df['description'].fillna('')
         df['author'] = df['author'].fillna('Unknown')
         df['title'] = df['title'].fillna('Untitled')
@@ -40,7 +40,7 @@ def load_model_and_vectorizer(df):
     # Menggabungkan teks dari kolom 'description', 'genre', dan 'author' secara langsung
     # untuk TF-IDF, tanpa membuat kolom 'combined_features' baru di DataFrame.
     # Pastikan kolom-kolom ini telah diisi NaN sebelumnya.
-    texts_for_tfidf = df['description'] + ' ' + df['genre'] + ' ' + df['author']
+    texts_for_tfidf = df['description'] + ' ' + df['genres'] + ' ' + df['author']
     
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(texts_for_tfidf)
