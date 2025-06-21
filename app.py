@@ -15,7 +15,7 @@ st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 # ---------------- LOAD DATA ----------------
 @st.cache_data
 def load_data():
-    df = pd.read_csv('novels.csv')
+    df = pd.read_csv('novels (1).csv')
     df = df.dropna(subset=['title', 'genre', 'rating'])  # pastikan kolom penting tidak kosong
     return df
 
