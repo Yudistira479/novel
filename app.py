@@ -1,15 +1,15 @@
 import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
 st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 
-#import pandas as pd
-#import matplotlib.pyplot as plt
-#from sklearn.ensemble import RandomForestRegressor
-#from sklearn.preprocessing import LabelEncoder
-
+# ------------------ Load Data ------------------
 @st.cache_data
 def load_data():
-    df = pd.read_csv('novels.csv')
-    return df
+    return pd.read_csv('/mnt/data/novels.csv')  # gunakan path file yang diupload
 
 df = load_data()
 
@@ -17,7 +17,7 @@ df = load_data()
 if 'history' not in st.session_state:
     st.session_state.history = []
 
-# CSS styling untuk mempercantik
+# ------------------ CSS Styling ------------------
 st.markdown("""
 <style>
 h1, h2, h3, h4 {
@@ -40,7 +40,7 @@ h1, h2, h3, h4 {
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar
+# ------------------ Sidebar ------------------
 st.sidebar.title("📚 Navigasi")
 page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"])
 
@@ -64,24 +64,37 @@ if page == "🏠 Home":
 # ------------------ Rekomendasi Berdasarkan Scored ------------------
 elif page == "⭐ Rekomendasi Scored":
     st.title("⭐ Rekomendasi Novel Berdasarkan Scored")
-    st.markdown("Masukkan skor dan sistem akan merekomendasikan novel dengan **scored serupa** menggunakan algoritma **Random Forest**.")
+    st.markdown("Masukkan skor dan sistem akan merekomendasikan novel dengan **scored serupa** menggunakan algoritma **Random Forest Regressor**.")
 
-    input_score = st.slider("🎯 Pilih Nilai Skor", min_value=float(df['scored'].min()), max_value=float(df['scored'].max()), value=float(df['scored'].mean()), step=0.01)
+    input_score = st.slider("🎯 Pilih Nilai Skor", min_value=float(df['scored'].min()),
+                            max_value=float(df['scored'].max()), 
+                            value=float(df['scored'].mean()), step=0.01)
 
+    # Pelatihan model
     X = df[['scored']]
     y = df['popularty']
-    model = RandomForestRegressor()
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
 
-    df['scored_diff'] = abs(df['scored'] - input_score)
-    recommended = df.sort_values(by='scored_diff').head(5)
+    # Evaluasi model
+    r2_score = model.score(X, y)
+    st.markdown(f"📈 <b>Model R² Score:</b> <code>{r2_score:.4f}</code>", unsafe_allow_html=True)
 
-    st.markdown(f"### 🔍 Rekomendasi berdasarkan skor: <span style='color:green'><code>{input_score:.2f}</code></span>", unsafe_allow_html=True)
-    st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
+    # Prediksi popularitas
+    predicted_pop = model.predict([[input_score]])[0]
+    st.markdown(f"📊 <b>Prediksi Popularitas untuk skor {input_score:.2f}:</b> <code>{predicted_pop:.2f}</code>", unsafe_allow_html=True)
+
+    # Tambahkan prediksi ke data
+    df['predicted_popularty'] = model.predict(df[['scored']])
+    df['predicted_diff'] = abs(df['predicted_popularty'] - predicted_pop)
+    recommended = df.sort_values(by='predicted_diff').head(5)
+
+    st.markdown("### 📚 Rekomendasi Novel:")
+    st.dataframe(recommended[['title', 'authors', 'genres', 'scored', 'popularty', 'predicted_popularty']], use_container_width=True)
 
     st.session_state.history.append({
         'judul_dipilih': f'Scored {input_score:.2f}',
-        'metode': 'scored',
+        'metode': 'random_forest',
         'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
     })
 
@@ -89,7 +102,7 @@ elif page == "⭐ Rekomendasi Scored":
 elif page == "🎯 Rekomendasi Genre":
     st.title("🎯 Rekomendasi Novel Berdasarkan Genre dari Judul")
     st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi novel dengan genre yang sama.")
-
+    
     title_input = st.text_input("✏️ Masukkan Judul Novel (case-sensitive)")
 
     if title_input:
@@ -97,18 +110,37 @@ elif page == "🎯 Rekomendasi Genre":
 
         if not selected_novel.empty:
             selected_genre = selected_novel.iloc[0]['genres']
-            recommended = df[df['genres'] == selected_genre].sort_values(by='scored', ascending=False).head(5)
+            genre_novels = df[df['genres'] == selected_genre]
 
             st.markdown(f"### 📌 Genre: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
-            st.dataframe(recommended[['title', 'authors', 'genres', 'scored']], use_container_width=True)
+
+            # Train Random Forest on genre-specific subset
+            X_genre = genre_novels[['scored']]
+            y_genre = genre_novels['popularty']
+            model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
+            model_genre.fit(X_genre, y_genre)
+
+            # Evaluasi model genre
+            r2_genre = model_genre.score(X_genre, y_genre)
+            st.markdown(f"📈 <b>Model R² Score (genre ini):</b> <code>{r2_genre:.4f}</code>", unsafe_allow_html=True)
+
+            # Prediksi popularitas semua novel dalam genre
+            genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
+
+            # Ambil 5 novel dengan prediksi popularitas tertinggi
+            recommended = genre_novels.sort_values(by='predicted_popularty', ascending=False).head(5)
+
+            st.markdown("### 📚 Rekomendasi Novel Berdasarkan Prediksi Popularitas:")
+            st.dataframe(recommended[['title', 'authors', 'genres', 'scored', 'popularty', 'predicted_popularty']], use_container_width=True)
 
             st.session_state.history.append({
                 'judul_dipilih': title_input,
-                'metode': 'genre',
+                'metode': 'genre + random_forest',
                 'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
             })
         else:
             st.warning("Judul tidak ditemukan dalam data.")
+
 
 # ------------------ Distribusi Genre dan Status ------------------
 elif page == "📊 Distribusi Novel":
