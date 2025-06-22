@@ -164,7 +164,7 @@ elif page == "📊 Distribusi Novel":
     st.title("📊 Distribusi Novel Berdasarkan Genre, Status, dan Tahun")
 
     st.markdown("### 📘 Distribusi 10 Genre Terpopuler")
-    genre_counts = df['genre'].value_counts(5).head(10)
+    genre_counts = df['genre'].value_counts().head(10)
     fig_genre, ax_genre = plt.subplots()
     ax_genre.bar(genre_counts.index, genre_counts.values, color='skyblue')
     ax_genre.set_ylabel("Jumlah Novel")
@@ -175,7 +175,7 @@ elif page == "📊 Distribusi Novel":
 
     st.markdown("### 📗 Distribusi Status Novel")
     if 'status' in df.columns:
-        status_counts = df['status'].value_counts(5)
+        status_counts = df['status'].value_counts()
         fig_status, ax_status = plt.subplots()
         ax_status.bar(status_counts.index, status_counts.values, color='lightgreen')
         ax_status.set_ylabel("Jumlah Novel")
@@ -187,7 +187,7 @@ elif page == "📊 Distribusi Novel":
 
     st.markdown("### 📆 Distribusi Tahun Mulai Novel")
     if 'years start' in df.columns:
-        year_start_counts = df['years start'].dropna().astype(int).value_counts(5).sort_index()
+        year_start_counts = df['years start'].dropna().astype(int).value_counts().sort_index()
         fig_start, ax_start = plt.subplots()
         ax_start.plot(year_start_counts.index, year_start_counts.values, marker='o', linestyle='-')
         ax_start.set_ylabel("Jumlah Novel")
