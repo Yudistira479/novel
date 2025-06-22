@@ -147,7 +147,7 @@ elif page == "🎯 Rekomendasi Genre":
 
             # Tampilkan hasil
             st.markdown("### 📚 Rekomendasi Novel:")
-            st.dataframe(recommended[['title', 'author', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
+            st.dataframe(recommended[['title', 'author', 'genre', 'score', 'type', 'popularty', 'predicted_popularty']], use_container_width=True)
 
             st.session_state.history.append({
                 'judul_dipilih': title_input,
