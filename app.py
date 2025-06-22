@@ -52,6 +52,10 @@ if page == "🏠 Home":
     top_novels = df.sort_values(by="popularty", ascending=False).head(10)
     st.dataframe(top_novels[['title', 'author', 'genre', 'score', 'popularty']], use_container_width=True)
 
+    st.markdown("### 🏅 10 Novel dengan Rating Tertinggi")
+    top_rated_novels = df.sort_values(by="score", ascending=False).head(10)
+    st.dataframe(top_rated_novels[['title', 'author', 'genre', 'score', 'popularty']], use_container_width=True)
+
     st.markdown("---")
     st.subheader("📜 Riwayat Rekomendasi")
     if st.session_state.history:
