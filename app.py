@@ -50,11 +50,11 @@ if page == "🏠 Home":
     st.markdown("Berikut adalah daftar **10 novel paling populer** berdasarkan data:")
 
     top_novels = df.sort_values(by="popularty", ascending=False).head(10)
-    st.dataframe(top_novels[['title', 'author', 'genre', 'score', 'popularty']], use_container_width=True)
+    st.dataframe(top_novels[['title', 'author','type', 'genre', 'score', 'popularty']], use_container_width=True)
 
     st.markdown("### 🏅 10 Novel dengan Rating Tertinggi")
     top_rated_novels = df.sort_values(by="score", ascending=False).head(10)
-    st.dataframe(top_rated_novels[['title', 'author', 'genre', 'score', 'popularty']], use_container_width=True)
+    st.dataframe(top_rated_novels[['title', 'author','type', 'genre', 'score', 'popularty']], use_container_width=True)
 
     st.markdown("---")
     st.subheader("📜 Riwayat Rekomendasi")
@@ -94,12 +94,12 @@ elif page == "⭐ Rekomendasi Score":
     recommended = df.sort_values(by='predicted_diff').head(5)
 
     st.markdown("### 📚 Rekomendasi Novel:")
-    st.dataframe(recommended[['title', 'author', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
+    st.dataframe(recommended[['title', 'author', 'type','genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
     st.session_state.history.append({
         'judul_dipilih': f'Score {input_score:.2f}',
         'metode': 'random_forest',
-        'rekomendasi': recommended[['title', 'author', 'genre', 'score']]
+        'rekomendasi': recommended[['title', 'author','type', 'genre', 'score']]
     })
 
 # ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa + Random Forest ------------------
@@ -147,12 +147,12 @@ elif page == "🎯 Rekomendasi Genre":
 
             # Tampilkan hasil
             st.markdown("### 📚 Rekomendasi Novel:")
-            st.dataframe(recommended[['title', 'author', 'genre', 'score', 'type', 'popularty', 'predicted_popularty']], use_container_width=True)
+            st.dataframe(recommended[['title', 'author','type', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
             st.session_state.history.append({
                 'judul_dipilih': title_input,
                 'metode': 'genre + judul mirip + random_forest',
-                'rekomendasi': recommended[['title', 'author', 'genre', 'score']]
+                'rekomendasi': recommended[['title', 'author', 'type','genre', 'score']]
             })
 
         else:
