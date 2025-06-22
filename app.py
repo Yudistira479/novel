@@ -147,16 +147,17 @@ elif page == "🎯 Rekomendasi Genre":
 
             # Tampilkan hasil
             st.markdown("### 📚 Rekomendasi Novel:")
-            st.dataframe(recommended[['title', 'author', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
+            st.dataframe(recommended[['title', 'author', 'genre', 'type', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
             st.session_state.history.append({
                 'judul_dipilih': title_input,
                 'metode': 'genre + judul mirip + random_forest',
-                'rekomendasi': recommended[['title', 'author', 'genre', 'score']]
+                'rekomendasi': recommended[['title', 'author', 'genre', 'type', 'score']]
             })
 
         else:
             st.warning("Judul tidak ditemukan dalam data.")
+
 
 
 
