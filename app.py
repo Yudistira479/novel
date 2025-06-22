@@ -164,7 +164,7 @@ elif page == "📊 Distribusi Novel":
     st.title("📊 Distribusi Novel Berdasarkan Genre, Status, dan Tahun")
 
     st.markdown("### 📘 Distribusi 10 Genre Terpopuler")
-    genre_counts = df['genre'].value_counts().head(10)
+    genre_counts = df['genre'].value_counts().head(5)
     fig_genre, ax_genre = plt.subplots()
     ax_genre.bar(genre_counts.index, genre_counts.values, color='skyblue')
     ax_genre.set_ylabel("Jumlah Novel")
