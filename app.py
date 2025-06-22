@@ -184,5 +184,25 @@ elif page == "📊 Distribusi Novel":
         st.pyplot(fig_status)
     else:
         st.warning("Kolom 'status' tidak ditemukan dalam dataset.")
+        
+    st.markdown("### 📆 Distribusi Tahun Mulai Novel")
+    if 'years start' in df.columns:
+        year_start_counts = df['years start'].dropna().astype(int).value_counts().sort_index()
+        fig_start, ax_start = plt.subplots()
+        ax_start.plot(year_start_counts.index, year_start_counts.values, marker='o', linestyle='-')
+        ax_start.set_ylabel("Jumlah Novel")
+        ax_start.set_xlabel("Tahun Mulai")
+        ax_start.set_title("Distribusi Tahun Mulai Novel")
+        st.pyplot(fig_start)
+
+    st.markdown("### 📅 Distribusi Tahun Selesai Novel")
+    if 'years finish' in df.columns:
+        year_finish_counts = df['years finish'].dropna().astype(int).value_counts().sort_index()
+        fig_finish, ax_finish = plt.subplots()
+        ax_finish.plot(year_finish_counts.index, year_finish_counts.values, marker='s', linestyle='--', color='orange')
+        ax_finish.set_ylabel("Jumlah Novel")
+        ax_finish.set_xlabel("Tahun Selesai")
+        ax_finish.set_title("Distribusi Tahun Selesai Novel")
+        st.pyplot(fig_finish)
 
     
