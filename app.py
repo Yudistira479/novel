@@ -42,7 +42,7 @@ h1, h2, h3, h4 {
 
 # ------------------ Sidebar ------------------
 st.sidebar.title("📚 Navigasi")
-page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Scored", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"])
+page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Score", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"])
 
 # ---------------------- Home Page ----------------------
 if page == "🏠 Home":
