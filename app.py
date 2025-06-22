@@ -107,9 +107,9 @@ elif page == "🎯 Rekomendasi Genre":
     st.title("🎯 Rekomendasi Novel Berdasarkan Genre & Judul Serupa")
     st.markdown("Pilih genre dan (opsional) masukkan judul. Sistem akan menampilkan rekomendasi novel dengan genre yang sama dan judul mirip menggunakan prediksi popularitas dari algoritma **Random Forest**.")
 
-    # Ambil 10 genre terpopuler berdasarkan frekuensi kemunculan
-    top_10_genres = df['genre'].value_counts().nlargest(10).index.tolist()
-    selected_genre = st.selectbox("📚 Pilih Genre", sorted(top_10_genres))
+    # Dropdown untuk genre (unik dari dataset)
+    genre_options = df['genre'].dropna().unique()
+    selected_genre = st.selectbox("📚 Pilih Genre", sorted(genre_options))
 
     # Text input untuk judul (opsional)
     title_input = st.text_input("✏️ Masukkan Judul Novel (boleh dikosongkan)")
