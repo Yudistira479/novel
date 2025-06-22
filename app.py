@@ -144,26 +144,46 @@ elif page == "🎯 Rekomendasi Genre":
 
 # ------------------ Distribusi Genre dan Status ------------------
 elif page == "📊 Distribusi Novel":
-    st.title("📊 Distribusi Genre dan Status Novel")
+    st.title("📊 Distribusi Novel Berdasarkan Genre, Status, dan Tahun")
 
-    col1, col2 = st.columns(2)
+    st.markdown("### 📘 Distribusi 10 Genre Terpopuler")
+    genre_counts = df['genre'].value_counts().head(10)
+    fig_genre, ax_genre = plt.subplots()
+    ax_genre.bar(genre_counts.index, genre_counts.values, color='skyblue')
+    ax_genre.set_ylabel("Jumlah Novel")
+    ax_genre.set_xlabel("Genre")
+    ax_genre.set_title("Top 10 Genre Novel")
+    ax_genre.tick_params(axis='x', rotation=45)
+    st.pyplot(fig_genre)
 
-    with col1:
-      if 'Genre' in df.columns:
-         st.subheader("🎭 Distribusi 10 Genre Terpopuler")
-         genre_counts = df['genre'].value_counts().head(10)
-         fig1, ax1 = plt.subplots()
-         ax1.pie(genre_counts, labels=genre_counts.index, autopct='%1.1f%%', startangle=140)
-         ax1.axis('equal')
-         st.pyplot(fig1)
+    st.markdown("### 📗 Distribusi Status Novel")
+    if 'status' in df.columns:
+        status_counts = df['status'].value_counts()
+        fig_status, ax_status = plt.subplots()
+        ax_status.bar(status_counts.index, status_counts.values, color='lightgreen')
+        ax_status.set_ylabel("Jumlah Novel")
+        ax_status.set_xlabel("Status")
+        ax_status.set_title("Distribusi Status Novel")
+        st.pyplot(fig_status)
+    else:
+        st.warning("Kolom 'status' tidak ditemukan dalam dataset.")
 
-    with col2:
-        if 'status' in df.columns:
-            st.subheader("📘 Distribusi Status Novel")
-            status_counts = df['status'].value_counts()
-            fig2, ax2 = plt.subplots()
-            ax2.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%', startangle=140)
-            ax2.axis('equal')
-            st.pyplot(fig2)
-        else:
-            st.warning("Kolom 'status' tidak ditemukan dalam dataset.")
+    st.markdown("### 📆 Distribusi Tahun Mulai Novel")
+    if 'years start' in df.columns:
+        year_start_counts = df['years start'].dropna().astype(int).value_counts().sort_index()
+        fig_start, ax_start = plt.subplots()
+        ax_start.plot(year_start_counts.index, year_start_counts.values, marker='o', linestyle='-')
+        ax_start.set_ylabel("Jumlah Novel")
+        ax_start.set_xlabel("Tahun Mulai")
+        ax_start.set_title("Distribusi Tahun Mulai Novel")
+        st.pyplot(fig_start)
+
+    st.markdown("### 📅 Distribusi Tahun Selesai Novel")
+    if 'years finish' in df.columns:
+        year_finish_counts = df['years finish'].dropna().astype(int).value_counts().sort_index()
+        fig_finish, ax_finish = plt.subplots()
+        ax_finish.plot(year_finish_counts.index, year_finish_counts.values, marker='s', linestyle='--', color='orange')
+        ax_finish.set_ylabel("Jumlah Novel")
+        ax_finish.set_xlabel("Tahun Selesai")
+        ax_finish.set_title("Distribusi Tahun Selesai Novel")
+        st.pyplot(fig_finish)
