@@ -149,14 +149,13 @@ elif page == "📊 Distribusi Novel":
     col1, col2 = st.columns(2)
 
     with col1:
-    st.subheader("🎭 Distribusi 10 Genre Terpopuler")
-    
-    genre_counts = df['genre'].value_counts().head(10)
-    
-    fig1, ax1 = plt.subplots()
-    ax1.pie(genre_counts, labels=genre_counts.index, autopct='%1.1f%%', startangle=140)
-    ax1.axis('equal')
-    st.pyplot(fig1)
+      if 'Genre' in df.columns:
+         st.subheader("🎭 Distribusi 10 Genre Terpopuler")
+         genre_counts = df['genre'].value_counts().head(10)
+         fig1, ax1 = plt.subplots()
+         ax1.pie(genre_counts, labels=genre_counts.index, autopct='%1.1f%%', startangle=140)
+         ax1.axis('equal')
+         st.pyplot(fig1)
 
     with col2:
         if 'status' in df.columns:
