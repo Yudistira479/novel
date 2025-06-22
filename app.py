@@ -105,70 +105,58 @@ elif page == "⭐ Rekomendasi Score":
 # ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa + Random Forest ------------------
 elif page == "🎯 Rekomendasi Genre":
     st.title("🎯 Rekomendasi Novel Berdasarkan Genre & Judul Serupa")
-    st.markdown("Pilih genre dan masukkan (atau pilih) judul novel. Sistem akan menampilkan rekomendasi novel berdasarkan genre dan kemiripan judul menggunakan **TF-IDF + Cosine Similarity**, serta prediksi popularitas menggunakan algoritma **Random Forest**.")
+    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi novel dengan **genre yang sama** dan **judul yang mirip**, menggunakan prediksi popularitas dari algoritma **Random Forest**.")
 
-    # ------------------ Input Genre ------------------
-    genre_input_mode = st.radio("Pilih cara input genre:", ["🔽 Pilih dari daftar", "⌨️ Ketik manual"])
+    title_input = st.text_input("✏️ Masukkan Judul Novel (boleh sebagian)")
 
-    if genre_input_mode == "🔽 Pilih dari daftar":
-        genre_options = df['genre'].dropna().unique()
-        selected_genre = st.selectbox("📚 Pilih Genre", sorted(genre_options))
-    else:
-        selected_genre = st.text_input("📚 Masukkan Genre Secara Manual")
+    if title_input:
+        # Temukan judul yang mengandung teks input
+        matched_titles = df[df['title'].str.contains(title_input, case=False, na=False)]
 
-    if selected_genre:
-        genre_novels = df[df['genre'].str.lower() == selected_genre.lower()].copy()
+        if not matched_titles.empty:
+            # Gunakan genre dari judul pertama yang cocok
+            selected_genre = matched_titles.iloc[0]['genre']
+            st.markdown(f"### 📌 Genre Ditemukan: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
 
-        if genre_novels.empty:
-            st.warning("Tidak ditemukan novel dengan genre ini.")
-        else:
-            # ------------------ Input Judul ------------------
-            title_input_mode = st.radio("Pilih cara input judul:", ["🔽 Pilih dari daftar", "⌨️ Ketik judul manual"])
+            # Filter semua novel dengan genre yang sama
+            genre_novels = df[df['genre'] == selected_genre].copy()
 
-            if title_input_mode == "🔽 Pilih dari daftar":
-                title_options = genre_novels['title'].dropna().unique()
-                title_input = st.selectbox("✏️ Pilih Judul Novel (opsional)", sorted(title_options))
-            else:
-                title_input = st.text_input("✏️ Masukkan Judul Novel (boleh dikosongkan)")
-
-            # ------------------ Random Forest Model ------------------
-            from sklearn.ensemble import RandomForestRegressor
+            # Latih model Random Forest pada genre ini
             X_genre = genre_novels[['score']]
             y_genre = genre_novels['popularty']
             model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
             model_genre.fit(X_genre, y_genre)
+
+            # Prediksi popularitas untuk seluruh novel dalam genre
             genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
 
-            # ------------------ TF-IDF + Cosine Similarity untuk Judul ------------------
-            if title_input:
-                from sklearn.feature_extraction.text import TfidfVectorizer
-                from sklearn.metrics.pairwise import cosine_similarity
+            # Filter novel dengan judul mirip
+            similar_titles = genre_novels[genre_novels['title'].str.contains(title_input, case=False, na=False)]
 
-                genre_novels['title'] = genre_novels['title'].fillna("")
-                tfidf = TfidfVectorizer()
-                tfidf_matrix = tfidf.fit_transform(genre_novels['title'])
+            # Jika tidak cukup, tambahkan dari genre yang sama
+            if len(similar_titles) < 5:
+                additional = genre_novels[~genre_novels['title'].str.contains(title_input, case=False, na=False)]
+                similar_titles = pd.concat([similar_titles, additional]).drop_duplicates()
 
-                input_vec = tfidf.transform([title_input])
-                similarities = cosine_similarity(input_vec, tfidf_matrix).flatten()
-                genre_novels['similarity'] = similarities
+            # Ambil 5 teratas berdasarkan score tertinggi
+            recommended = similar_titles.sort_values(by='score', ascending=False).head(5)
 
-                recommended = genre_novels.sort_values(by=['similarity', 'score'], ascending=False).head(5)
-            else:
-                recommended = genre_novels.sort_values(by='score', ascending=False).head(5)
-
-            # ------------------ Evaluasi & Tampilkan ------------------
+            # Evaluasi model
             r2_genre = model_genre.score(X_genre, y_genre)
             st.markdown(f"📈 <b>Model R² Score (genre ini):</b> <code>{r2_genre:.4f}</code>", unsafe_allow_html=True)
 
+            # Tampilkan hasil
             st.markdown("### 📚 Rekomendasi Novel:")
-            st.dataframe(recommended[['title', 'author', 'genre', 'type', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
+            st.dataframe(recommended[['title', 'author', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
-            # ------------------ Simpan Riwayat ------------------
             st.session_state.history.append({
-                'judul_dipilih': f"{selected_genre} - {title_input if title_input else '[semua judul]'}",
-                'metode': 'input genre + judul mirip (TF-IDF) + random_forest',
-                'rekomendasi': recommended[['title', 'author', 'genre', 'type', 'score']]
+                'judul_dipilih': title_input,
+                'metode': 'genre + judul mirip + random_forest',
+                'rekomendasi': recommended[['title', 'author', 'genre', 'score']]
             })
+
+        else:
+            st.warning("Judul tidak ditemukan dalam data.")
 
 
 # ------------------ Distribusi Genre dan Status ------------------
