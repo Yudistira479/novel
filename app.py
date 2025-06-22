@@ -105,22 +105,22 @@ elif page == "⭐ Rekomendasi Score":
 # ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa + Random Forest ------------------
 elif page == "🎯 Rekomendasi Genre":
     st.title("🎯 Rekomendasi Novel Berdasarkan Genre & Judul Serupa")
-    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi novel dengan **genre yang sama** dan **judul yang mirip**, menggunakan prediksi popularitas dari algoritma **Random Forest**.")
+    st.markdown("Pilih genre dan (opsional) masukkan judul. Sistem akan menampilkan rekomendasi novel dengan genre yang sama dan judul mirip menggunakan prediksi popularitas dari algoritma **Random Forest**.")
 
-    title_input = st.text_input("✏️ Masukkan Judul Novel (boleh sebagian)")
+    # Dropdown untuk genre (unik dari dataset)
+    genre_options = df['genre'].dropna().unique()
+    selected_genre = st.selectbox("📚 Pilih Genre", sorted(genre_options))
 
-    if title_input:
-        # Temukan judul yang mengandung teks input
-        matched_titles = df[df['title'].str.contains(title_input, case=False, na=False)]
+    # Text input untuk judul (opsional)
+    title_input = st.text_input("✏️ Masukkan Judul Novel (boleh dikosongkan)")
 
-        if not matched_titles.empty:
-            # Gunakan genre dari judul pertama yang cocok
-            selected_genre = matched_titles.iloc[0]['genre']
-            st.markdown(f"### 📌 Genre Ditemukan: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
+    if selected_genre:
+        # Filter semua novel dengan genre yang sama
+        genre_novels = df[df['genre'] == selected_genre].copy()
 
-            # Filter semua novel dengan genre yang sama
-            genre_novels = df[df['genre'] == selected_genre].copy()
-
+        if genre_novels.empty:
+            st.warning("Tidak ditemukan novel dengan genre ini.")
+        else:
             # Latih model Random Forest pada genre ini
             X_genre = genre_novels[['score']]
             y_genre = genre_novels['popularty']
@@ -130,15 +130,16 @@ elif page == "🎯 Rekomendasi Genre":
             # Prediksi popularitas untuk seluruh novel dalam genre
             genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
 
-            # Filter novel dengan judul mirip
-            similar_titles = genre_novels[genre_novels['title'].str.contains(title_input, case=False, na=False)]
+            # Jika user mengisi judul, filter berdasarkan substring
+            if title_input:
+                similar_titles = genre_novels[genre_novels['title'].str.contains(title_input, case=False, na=False)]
+                if len(similar_titles) < 5:
+                    additional = genre_novels[~genre_novels['title'].str.contains(title_input, case=False, na=False)]
+                    similar_titles = pd.concat([similar_titles, additional]).drop_duplicates()
+            else:
+                similar_titles = genre_novels
 
-            # Jika tidak cukup, tambahkan dari genre yang sama
-            if len(similar_titles) < 5:
-                additional = genre_novels[~genre_novels['title'].str.contains(title_input, case=False, na=False)]
-                similar_titles = pd.concat([similar_titles, additional]).drop_duplicates()
-
-            # Ambil 5 teratas berdasarkan score tertinggi
+            # Urutkan berdasarkan skor tertinggi
             recommended = similar_titles.sort_values(by='score', ascending=False).head(5)
 
             # Evaluasi model
@@ -150,13 +151,11 @@ elif page == "🎯 Rekomendasi Genre":
             st.dataframe(recommended[['title', 'author', 'genre', 'type', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
             st.session_state.history.append({
-                'judul_dipilih': title_input,
-                'metode': 'genre + judul mirip + random_forest',
+                'judul_dipilih': f"{selected_genre} - {title_input if title_input else '[semua judul]'}",
+                'metode': 'input genre + judul mirip + random_forest',
                 'rekomendasi': recommended[['title', 'author', 'genre', 'type', 'score']]
             })
 
-        else:
-            st.warning("Judul tidak ditemukan dalam data.")
 
 
 
