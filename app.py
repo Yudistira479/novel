@@ -103,47 +103,50 @@ elif page == "⭐ Rekomendasi Score":
     })
 
 # ------------------ Rekomendasi Berdasarkan Genre dari Judul ------------------
+# ------------------ Rekomendasi Berdasarkan Genre & Judul ------------------
 elif page == "🎯 Rekomendasi Genre":
-    st.title("🎯 Rekomendasi Novel Berdasarkan Genre dari Judul")
-    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi novel dengan genre yang sama.")
-    
-    title_input = st.text_input("✏️ Masukkan Judul Novel (case-sensitive)")
+    st.title("🎯 Rekomendasi Novel Berdasarkan Genre dan Judul Serupa")
+    st.markdown("Masukkan judul novel, dan sistem akan merekomendasikan novel dengan **genre yang sama** dan **judul yang mirip**, diurutkan berdasarkan score tertinggi.")
+
+    title_input = st.text_input("✏️ Masukkan Judul Novel (boleh sebagian)")
 
     if title_input:
-        selected_novel = df[df['title'] == title_input]
+        # Cari judul yang mengandung teks input (case-insensitive)
+        matched_titles = df[df['title'].str.contains(title_input, case=False, na=False)]
 
-        if not selected_novel.empty:
-            selected_genre = selected_novel.iloc[0]['genre']
-            genre_novels = df[df['genre'] == selected_genre]
+        if not matched_titles.empty:
+            # Ambil genre dari judul pertama yang cocok
+            selected_genre = matched_titles.iloc[0]['genre']
+            st.markdown(f"### 📌 Genre Ditemukan: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
 
-            st.markdown(f"### 📌 Genre: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
+            # Filter novel dengan genre yang sama dan judul yang mirip
+            filtered_novels = df[
+                (df['genre'] == selected_genre) &
+                (df['title'].str.contains(title_input, case=False, na=False))
+            ]
 
-            # Train Random Forest on genre-specific subset
-            X_genre = genre_novels[['score']]
-            y_genre = genre_novels['popularty']
-            model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
-            model_genre.fit(X_genre, y_genre)
+            # Jika terlalu sedikit hasil, tambahkan semua novel dari genre tsb
+            if len(filtered_novels) < 5:
+                additional = df[
+                    (df['genre'] == selected_genre) &
+                    (~df['title'].str.contains(title_input, case=False, na=False))
+                ].sort_values(by='score', ascending=False).head(10)
+                filtered_novels = pd.concat([filtered_novels, additional]).drop_duplicates()
 
-            # Evaluasi model genre
-            r2_genre = model_genre.score(X_genre, y_genre)
-            st.markdown(f"📈 <b>Model R² Score (genre ini):</b> <code>{r2_genre:.4f}</code>", unsafe_allow_html=True)
+            # Urutkan berdasarkan score tertinggi
+            recommended = filtered_novels.sort_values(by='score', ascending=False).head(5)
 
-            # Prediksi popularitas semua novel dalam genre
-            genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
-
-            # Ambil 5 novel dengan prediksi popularitas tertinggi
-            recommended = genre_novels.sort_values(by='predicted_popularty', ascending=False).head(5)
-
-            st.markdown("### 📚 Rekomendasi Novel Berdasarkan Prediksi Popularitas:")
-            st.dataframe(recommended[['title', 'author', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
+            st.markdown("### 📚 Rekomendasi Novel Berdasarkan Genre & Judul:")
+            st.dataframe(recommended[['title', 'author', 'genre', 'score', 'popularty']], use_container_width=True)
 
             st.session_state.history.append({
                 'judul_dipilih': title_input,
-                'metode': 'genre + random_forest',
+                'metode': 'genre + judul mirip',
                 'rekomendasi': recommended[['title', 'author', 'genre', 'score']]
             })
         else:
             st.warning("Judul tidak ditemukan dalam data.")
+
 
 
 # ------------------ Distribusi Genre dan Status ------------------
