@@ -9,7 +9,7 @@ st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
 # ------------------ Load Data ------------------
 @st.cache_data
 def load_data():
-    return pd.read_csv('novels.csv')  # gunakan path file yang diupload
+    return pd.read_csv('novels_selected.csv')  # gunakan path file yang diupload
 
 df = load_data()
 
