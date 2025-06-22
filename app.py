@@ -102,33 +102,35 @@ elif page == "⭐ Rekomendasi Score":
         'rekomendasi': recommended[['title', 'author', 'genre', 'score']]
     })
 
-# ------------------ Rekomendasi Berdasarkan Genre Manual & Judul Serupa + Random Forest ------------------
+# ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa + Random Forest ------------------
 elif page == "🎯 Rekomendasi Genre":
     st.title("🎯 Rekomendasi Novel Berdasarkan Genre & Judul Serupa")
-    st.markdown("Masukkan genre dan (opsional) judul. Sistem akan menampilkan rekomendasi novel berdasarkan **genre** dan **judul mirip**, menggunakan prediksi popularitas dari algoritma **Random Forest**.")
+    st.markdown("Pilih genre dan (opsional) masukkan judul. Sistem akan menampilkan rekomendasi novel dengan genre yang sama dan judul mirip menggunakan prediksi popularitas dari algoritma **Random Forest**.")
 
-    # Input manual genre
-    genre_input = st.text_input("📚 Masukkan Genre (case-insensitive)")
-    # Input judul opsional
-    title_input = st.text_input("✏️ Masukkan Judul Novel (boleh kosong)")
+    # Ambil 10 genre terpopuler berdasarkan frekuensi kemunculan
+    top_10_genres = df['genre'].value_counts().nlargest(10).index.tolist()
+    selected_genre = st.selectbox("📚 Pilih Genre", sorted(top_10_genres))
 
-    if genre_input:
-        # Filter novel berdasarkan genre
-        genre_novels = df[df['genre'].str.lower() == genre_input.lower()].copy()
+    # Text input untuk judul (opsional)
+    title_input = st.text_input("✏️ Masukkan Judul Novel (boleh dikosongkan)")
+
+    if selected_genre:
+        # Filter semua novel dengan genre yang sama
+        genre_novels = df[df['genre'] == selected_genre].copy()
 
         if genre_novels.empty:
-            st.warning("Genre tidak ditemukan dalam data.")
+            st.warning("Tidak ditemukan novel dengan genre ini.")
         else:
-            # Latih model pada genre tersebut
+            # Latih model Random Forest pada genre ini
             X_genre = genre_novels[['score']]
             y_genre = genre_novels['popularty']
             model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
             model_genre.fit(X_genre, y_genre)
 
-            # Prediksi popularitas
+            # Prediksi popularitas untuk seluruh novel dalam genre
             genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
 
-            # Filter judul jika ada input
+            # Jika user mengisi judul, filter berdasarkan substring
             if title_input:
                 similar_titles = genre_novels[genre_novels['title'].str.contains(title_input, case=False, na=False)]
                 if len(similar_titles) < 5:
@@ -137,7 +139,7 @@ elif page == "🎯 Rekomendasi Genre":
             else:
                 similar_titles = genre_novels
 
-            # Urutkan dan ambil 5 teratas
+            # Urutkan berdasarkan skor tertinggi
             recommended = similar_titles.sort_values(by='score', ascending=False).head(5)
 
             # Evaluasi model
@@ -149,11 +151,10 @@ elif page == "🎯 Rekomendasi Genre":
             st.dataframe(recommended[['title', 'author', 'genre', 'type', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
             st.session_state.history.append({
-                'judul_dipilih': f"{genre_input} - {title_input if title_input else '[semua judul]'}",
-                'metode': 'manual genre + judul mirip + random_forest',
+                'judul_dipilih': f"{selected_genre} - {title_input if title_input else '[semua judul]'}",
+                'metode': 'input genre + judul mirip + random_forest',
                 'rekomendasi': recommended[['title', 'author', 'genre', 'type', 'score']]
             })
-
 
 
 # ------------------ Distribusi Genre dan Status ------------------
