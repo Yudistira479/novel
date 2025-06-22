@@ -50,7 +50,7 @@ if page == "🏠 Home":
     st.markdown("Berikut adalah daftar **10 novel paling populer** berdasarkan data:")
 
     top_novels = df.sort_values(by="popularty", ascending=False).head(10)
-    st.dataframe(top_novels[['title', 'authors', 'genres', 'scored', 'popularty']], use_container_width=True)
+    st.dataframe(top_novels[['title', 'author', 'genre', 'score', 'popularty']], use_container_width=True)
 
     st.markdown("---")
     st.subheader("📜 Riwayat Rekomendasi")
@@ -62,16 +62,16 @@ if page == "🏠 Home":
         st.info("Belum ada riwayat rekomendasi. Silakan coba fitur rekomendasi di sidebar.")
 
 # ------------------ Rekomendasi Berdasarkan Scored ------------------
-elif page == "⭐ Rekomendasi Scored":
-    st.title("⭐ Rekomendasi Novel Berdasarkan Scored")
-    st.markdown("Masukkan skor dan sistem akan merekomendasikan novel dengan **scored serupa** menggunakan algoritma **Random Forest Regressor**.")
+elif page == "⭐ Rekomendasi Score":
+    st.title("⭐ Rekomendasi Novel Berdasarkan Score")
+    st.markdown("Masukkan skor dan sistem akan merekomendasikan novel dengan **score serupa** menggunakan algoritma **Random Forest Regressor**.")
 
-    input_score = st.slider("🎯 Pilih Nilai Skor", min_value=float(df['scored'].min()),
-                            max_value=float(df['scored'].max()), 
-                            value=float(df['scored'].mean()), step=0.01)
+    input_score = st.slider("🎯 Pilih Nilai Skor", min_value=float(df['score'].min()),
+                            max_value=float(df['score'].max()), 
+                            value=float(df['score'].mean()), step=0.01)
 
     # Pelatihan model
-    X = df[['scored']]
+    X = df[['score']]
     y = df['popularty']
     model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
@@ -85,17 +85,17 @@ elif page == "⭐ Rekomendasi Scored":
     st.markdown(f"📊 <b>Prediksi Popularitas untuk skor {input_score:.2f}:</b> <code>{predicted_pop:.2f}</code>", unsafe_allow_html=True)
 
     # Tambahkan prediksi ke data
-    df['predicted_popularty'] = model.predict(df[['scored']])
+    df['predicted_popularty'] = model.predict(df[['score']])
     df['predicted_diff'] = abs(df['predicted_popularty'] - predicted_pop)
     recommended = df.sort_values(by='predicted_diff').head(5)
 
     st.markdown("### 📚 Rekomendasi Novel:")
-    st.dataframe(recommended[['title', 'authors', 'genres', 'scored', 'popularty', 'predicted_popularty']], use_container_width=True)
+    st.dataframe(recommended[['title', 'author', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
     st.session_state.history.append({
-        'judul_dipilih': f'Scored {input_score:.2f}',
+        'judul_dipilih': f'Score {input_score:.2f}',
         'metode': 'random_forest',
-        'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
+        'rekomendasi': recommended[['title', 'author', 'genre', 'score']]
     })
 
 # ------------------ Rekomendasi Berdasarkan Genre dari Judul ------------------
@@ -109,13 +109,13 @@ elif page == "🎯 Rekomendasi Genre":
         selected_novel = df[df['title'] == title_input]
 
         if not selected_novel.empty:
-            selected_genre = selected_novel.iloc[0]['genres']
-            genre_novels = df[df['genres'] == selected_genre]
+            selected_genre = selected_novel.iloc[0]['genre']
+            genre_novels = df[df['genre'] == selected_genre]
 
             st.markdown(f"### 📌 Genre: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
 
             # Train Random Forest on genre-specific subset
-            X_genre = genre_novels[['scored']]
+            X_genre = genre_novels[['score']]
             y_genre = genre_novels['popularty']
             model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
             model_genre.fit(X_genre, y_genre)
@@ -131,12 +131,12 @@ elif page == "🎯 Rekomendasi Genre":
             recommended = genre_novels.sort_values(by='predicted_popularty', ascending=False).head(5)
 
             st.markdown("### 📚 Rekomendasi Novel Berdasarkan Prediksi Popularitas:")
-            st.dataframe(recommended[['title', 'authors', 'genres', 'scored', 'popularty', 'predicted_popularty']], use_container_width=True)
+            st.dataframe(recommended[['title', 'author', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
             st.session_state.history.append({
                 'judul_dipilih': title_input,
                 'metode': 'genre + random_forest',
-                'rekomendasi': recommended[['title', 'authors', 'genres', 'scored']]
+                'rekomendasi': recommended[['title', 'author', 'genre', 'score']]
             })
         else:
             st.warning("Judul tidak ditemukan dalam data.")
@@ -150,7 +150,7 @@ elif page == "📊 Distribusi Novel":
 
     with col1:
         st.subheader("🎭 Distribusi Genre")
-        genre_counts = df['genres'].value_counts()
+        genre_counts = df['genre'].value_counts()
         fig1, ax1 = plt.subplots()
         ax1.pie(genre_counts, labels=genre_counts.index, autopct='%1.1f%%', startangle=140)
         ax1.axis('equal')
