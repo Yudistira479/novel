@@ -65,18 +65,27 @@ elif page == "⭐ Rekomendasi Score":
                             max_value=float(df['score'].max()), 
                             value=float(df['score'].mean()), step=0.01)
 
-    X = df[['score']]
+    # Ekstraksi fitur menggunakan TF-IDF pada judul
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(df['title'].fillna(''))
+    tfidf_features = pd.DataFrame(tfidf_matrix.toarray(), columns=tfidf.get_feature_names_out())
+
+    # Gabungkan dengan fitur numerik lainnya (score)
+    X = pd.concat([df[['score']].reset_index(drop=True), tfidf_features], axis=1)
     y = df['popularty']
+
     model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
 
     r2_score = model.score(X, y)
     st.markdown(f"📈 <b>Model R² Score:</b> <code>{r2_score:.4f}</code>", unsafe_allow_html=True)
 
-    predicted_pop = model.predict([[input_score]])[0]
+    # Input manual hanya berupa score, TF-IDF diasumsikan nol untuk prediksi baru
+    new_input = pd.DataFrame([[input_score] + [0]*len(tfidf.get_feature_names_out())], columns=X.columns)
+    predicted_pop = model.predict(new_input)[0]
     st.markdown(f"📊 <b>Prediksi Popularitas untuk skor {input_score:.2f}:</b> <code>{predicted_pop:.2f}</code>", unsafe_allow_html=True)
 
-    df['predicted_popularty'] = model.predict(df[['score']])
+    df['predicted_popularty'] = model.predict(X)
     df['predicted_diff'] = abs(df['predicted_popularty'] - predicted_pop)
     recommended = df.sort_values(by='predicted_diff').head(5)
 
@@ -85,7 +94,7 @@ elif page == "⭐ Rekomendasi Score":
 
     st.session_state.history.append({
         'judul_dipilih': f'Score {input_score:.2f}',
-        'metode': 'random_forest',
+        'metode': 'TF-IDF + random_forest',
         'rekomendasi': recommended[['title', 'author','type', 'genre', 'score']]
     })
 
