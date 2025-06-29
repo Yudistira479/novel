@@ -98,10 +98,10 @@ elif page == "⭐ Rekomendasi Score":
         'rekomendasi': recommended[['title', 'author','type', 'genre', 'score']]
     })
 
-# ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa (TF-IDF) ------------------
+# ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa ------------------
 elif page == "🎯 Rekomendasi Genre":
-    st.title("🎯 Rekomendasi Berdasarkan Genre & Judul Serupa (TF-IDF)")
-    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi berdasarkan <b>genre yang sama</b> dan <b>judul yang mirip</b>, menggunakan <code>TF-IDF + Cosine Similarity</code>.", unsafe_allow_html=True)
+    st.title("🎯 Rekomendasi Berdasarkan Genre & Judul Serupa")
+    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi berdasarkan <b>genre yang sama</b> dan <b>judul yang mirip</b>, unsafe_allow_html=True)
 
     title_input = st.text_input("✏️ Masukkan Judul Novel")
 
