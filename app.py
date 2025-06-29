@@ -1,121 +1,170 @@
+import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
+st.set_page_config(page_title="📖 Novel Recommendation App", layout="wide")
+
 # ------------------ Load Data ------------------
-df = pd.read_csv('novels_selected.csv')
+@st.cache_data
+def load_data():
+    return pd.read_csv('novels_selected.csv')  # gunakan path file yang diupload
+
+df = load_data()
+
+# Inisialisasi session state untuk menyimpan riwayat
+if 'history' not in st.session_state:
+    st.session_state.history = []
 
 # ------------------ Ekstraksi Fitur TF-IDF ------------------
 df['title'] = df['title'].fillna('').str.lower().str.replace('[^a-zA-Z]', ' ', regex=True).str.replace('\s+', ' ', regex=True).str.strip()
 tfidf_vectorizer = TfidfVectorizer(stop_words='english')
 tfidf_matrix = tfidf_vectorizer.fit_transform(df['title'])
+tfidf_features_df = pd.DataFrame(tfidf_matrix.toarray(), columns=tfidf_vectorizer.get_feature_names_out())
+
+# ------------------ CSS Styling ------------------
+st.markdown("""
+<style>
+h1, h2, h3, h4 {
+    color: #2E8B57;
+}
+[data-testid="stSidebar"] {
+    background-color: #f0f2f6;
+}
+.stButton>button {
+    color: white;
+    background-color: #2E8B57;
+    border-radius: 10px;
+}
+.stTable {
+    background-color: #ffffff;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ------------------ Sidebar ------------------
+st.sidebar.title("📚 Navigasi")
+page = st.sidebar.radio("Pilih Halaman:", ["🏠 Home", "⭐ Rekomendasi Score", "🎯 Rekomendasi Genre", "📊 Distribusi Novel"])
+
+# ---------------------- Home Page ----------------------
+if page == "🏠 Home":
+    st.title("📚 Daftar Novel Populer")
+    st.markdown("Berikut adalah daftar **10 novel paling populer** berdasarkan data:")
+
+    top_novels = df.sort_values(by="popularty", ascending=False).head(10)
+    st.dataframe(top_novels[['title', 'author','type', 'genre', 'score', 'popularty']], use_container_width=True)
+
+    st.markdown("### 🏅 10 Novel dengan Rating Tertinggi")
+    top_rated_novels = df.sort_values(by="score", ascending=False).head(10)
+    st.dataframe(top_rated_novels[['title', 'author','type', 'genre', 'score', 'popularty']], use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📜 Riwayat Rekomendasi")
+    if st.session_state.history:
+        for item in st.session_state.history[::-1]:
+            st.markdown(f"### 🔎 Rekomendasi berdasarkan: <span style='color:green'><code>{item['judul_dipilih']}</code></span>", 
+                        unsafe_allow_html=True)
+            st.table(item['rekomendasi'])
+    else:
+        st.info("Belum ada riwayat rekomendasi. Silakan coba fitur rekomendasi di sidebar.")
 
 # ------------------ Rekomendasi Berdasarkan Scored ------------------
-def rekomendasi_berdasarkan_score(input_score):
-    if not isinstance(input_score, (int, float)):
-        print("❌ Input skor tidak valid. Harus berupa angka.")
-        return None
+elif page == "⭐ Rekomendasi Score":
+    st.title("⭐ Rekomendasi Novel Berdasarkan Score")
+    st.markdown("Masukkan skor dan sistem akan merekomendasikan novel dengan **score serupa** menggunakan algoritma **Random Forest Regressor** dan kemiripan judul TF-IDF.")
 
+    input_score = st.slider("🎯 Pilih Nilai Skor", min_value=float(df['score'].min()),
+                            max_value=float(df['score'].max()), 
+                            value=float(df['score'].mean()), step=0.01)
+
+    # Pelatihan model
     X = df[['score']]
     y = df['popularty']
     model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
 
+    # Evaluasi model
+    r2_score = model.score(X, y)
+    st.markdown(f"📈 <b>Model R² Score:</b> <code>{r2_score:.4f}</code>", unsafe_allow_html=True)
+
+    # Prediksi popularitas
     predicted_pop = model.predict([[input_score]])[0]
+    st.markdown(f"📊 <b>Prediksi Popularitas untuk skor {input_score:.2f}:</b> <code>{predicted_pop:.2f}</code>", unsafe_allow_html=True)
+
+    # Rekomendasi berdasarkan prediksi popularitas
     df['predicted_popularty'] = model.predict(df[['score']])
     df['predicted_diff'] = abs(df['predicted_popularty'] - predicted_pop)
 
+    # Kombinasikan dengan TF-IDF similarity
     tfidf_similarities = cosine_similarity(tfidf_matrix, tfidf_matrix)
     input_idx = np.argmin(abs(df['score'] - input_score))
     tfidf_scores = tfidf_similarities[input_idx]
     df['tfidf_sim'] = tfidf_scores
 
+    # Rekomendasi berdasarkan skor gabungan
     df['combined_score'] = df['tfidf_sim'] - df['predicted_diff'] / df['predicted_diff'].max()
     recommended = df.sort_values(by='combined_score', ascending=False).head(5)
-    return recommended[['title', 'author', 'type','genre', 'score', 'popularty', 'predicted_popularty']]
 
-# ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa ------------------
-def rekomendasi_berdasarkan_genre(title_input):
-    if not title_input.strip():
-        print("❌ Judul tidak boleh kosong.")
-        return None
+    st.markdown("### 📚 Rekomendasi Novel:")
+    st.dataframe(recommended[['title', 'author', 'type','genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
 
-    matched_titles = df[df['title'].str.contains(title_input, case=False, na=False)]
-    if matched_titles.empty:
-        return None
+    st.session_state.history.append({
+        'judul_dipilih': f'Score {input_score:.2f}',
+        'metode': 'random_forest + tfidf_similarity',
+        'rekomendasi': recommended[['title', 'author','type', 'genre', 'score']]
+    })
 
-    selected_genre = matched_titles.iloc[0]['genre']
-    genre_novels = df[df['genre'] == selected_genre].copy()
-    X_genre = genre_novels[['score']]
-    y_genre = genre_novels['popularty']
-    model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
-    model_genre.fit(X_genre, y_genre)
+# ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa + Random Forest ------------------
+elif page == "🎯 Rekomendasi Genre":
+    st.title("🎯 Rekomendasi Novel Berdasarkan Genre & Judul Serupa")
+    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi novel dengan **genre yang sama** dan **judul yang mirip**, menggunakan **Random Forest** dan kemiripan judul **TF-IDF**.")
 
-    genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
+    title_input = st.text_input("✏️ Masukkan Judul Novel (boleh sebagian)")
 
-    genre_indices = genre_novels.index
-    title_vector = tfidf_vectorizer.transform([title_input])
-    genre_tfidf = tfidf_matrix[genre_indices]
-    tfidf_sim = cosine_similarity(title_vector, genre_tfidf).flatten()
-    genre_novels['tfidf_sim'] = tfidf_sim
+    if title_input:
+        matched_titles = df[df['title'].str.contains(title_input, case=False, na=False)]
 
-    genre_novels['combined_score'] = genre_novels['tfidf_sim'] + genre_novels['predicted_popularty'] / genre_novels['predicted_popularty'].max()
+        if not matched_titles.empty:
+            selected_genre = matched_titles.iloc[0]['genre']
+            st.markdown(f"### 📌 Genre Ditemukan: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
 
-    recommended = genre_novels.sort_values(by='combined_score', ascending=False).head(5)
-    return recommended[['title', 'author', 'type','genre', 'score', 'popularty', 'predicted_popularty']]
+            genre_novels = df[df['genre'] == selected_genre].copy()
+            X_genre = genre_novels[['score']]
+            y_genre = genre_novels['popularty']
+            model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
+            model_genre.fit(X_genre, y_genre)
 
-# ------------------ Visualisasi Distribusi ------------------
-def visualisasi_distribusi():
-    plt.figure(figsize=(10, 6))
-    top_genres = df['genre'].value_counts().head(10)
-    top_genres.plot(kind='bar', color='skyblue')
-    plt.title('Distribusi 10 Genre Terpopuler')
-    plt.xlabel('Genre')
-    plt.ylabel('Jumlah Novel')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
+            genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
 
-    plt.figure(figsize=(6, 4))
-    status_counts = df['status'].value_counts()
-    status_counts.plot(kind='bar', color='salmon')
-    plt.title('Distribusi Status Novel')
-    plt.xlabel('Status')
-    plt.ylabel('Jumlah')
-    plt.xticks(rotation=0)
-    plt.tight_layout()
-    plt.show()
+            # Kemiripan TF-IDF dalam genre
+            genre_indices = genre_novels.index
+            title_vector = tfidf_vectorizer.transform([title_input])
+            genre_tfidf = tfidf_matrix[genre_indices]
+            tfidf_sim = cosine_similarity(title_vector, genre_tfidf).flatten()
+            genre_novels['tfidf_sim'] = tfidf_sim
 
-    if 'years start' in df.columns:
-        plt.figure(figsize=(10, 6))
-        df['years start'].dropna().astype(int).value_counts().sort_index().plot(kind='bar', color='lightgreen')
-        plt.title('Distribusi Tahun Terbit Novel')
-        plt.xlabel('Tahun')
-        plt.ylabel('Jumlah Novel')
-        plt.tight_layout()
-        plt.show()
+            genre_novels['combined_score'] = genre_novels['tfidf_sim'] + genre_novels['predicted_popularty'] / genre_novels['predicted_popularty'].max()
 
-# ------------------ Contoh Penggunaan ------------------
-if __name__ == "__main__":
-    print("Rekomendasi berdasarkan skor:")
-    try:
-        skor_input = float(input("Masukkan skor: "))
-        hasil_skor = rekomendasi_berdasarkan_score(skor_input)
-        if hasil_skor is not None:
-            print(hasil_skor.to_string(index=False))
-    except ValueError:
-        print("❌ Input skor tidak valid. Harus berupa angka.")
+            recommended = genre_novels.sort_values(by='combined_score', ascending=False).head(5)
 
-    print("\nRekomendasi berdasarkan genre dan judul:")
-    judul_input = input("Masukkan judul: ").strip()
-    hasil_genre = rekomendasi_berdasarkan_genre(judul_input)
-    if hasil_genre is not None:
-        print(hasil_genre.to_string(index=False))
-    else:
-        print("❌ Judul tidak ditemukan atau tidak valid.")
+            r2_genre = model_genre.score(X_genre, y_genre)
+            st.markdown(f"📈 <b>Model R² Score (genre ini):</b> <code>{r2_genre:.4f}</code>", unsafe_allow_html=True)
 
-    print("\nVisualisasi distribusi genre, status, dan tahun terbit:")
-    visualisasi_distribusi()
+            st.markdown("### 📚 Rekomendasi Novel:")
+            st.dataframe(recommended[['title', 'author','type', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
+
+            st.session_state.history.append({
+                'judul_dipilih': title_input,
+                'metode': 'genre + tfidf + random_forest',
+                'rekomendasi': recommended[['title', 'author', 'type','genre', 'score']]
+            })
+
+        else:
+            st.warning("Judul tidak ditemukan dalam data.") 
