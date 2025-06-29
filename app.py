@@ -108,7 +108,7 @@ elif page == "⭐ Rekomendasi Score":
     tfidf_scores = tfidf_similarities[input_idx]
     df['tfidf_sim'] = tfidf_scores
 
-    # Rekomendasi berdasarkan skor gabungan (kombinasi jarak prediksi dan tfidf similarity)
+    # Rekomendasi berdasarkan skor gabungan
     df['combined_score'] = df['tfidf_sim'] - df['predicted_diff'] / df['predicted_diff'].max()
     recommended = df.sort_values(by='combined_score', ascending=False).head(5)
 
@@ -150,7 +150,7 @@ elif page == "🎯 Rekomendasi Genre":
             tfidf_sim = cosine_similarity(title_vector, genre_tfidf).flatten()
             genre_novels['tfidf_sim'] = tfidf_sim
 
-            genre_novels['combined_score'] = genre_novels['tfidf_sim'] + genre_novels['score'] / genre_novels['score'].max()
+            genre_novels['combined_score'] = genre_novels['tfidf_sim'] + genre_novels['predicted_popularty'] / genre_novels['predicted_popularty'].max()
 
             recommended = genre_novels.sort_values(by='combined_score', ascending=False).head(5)
 
