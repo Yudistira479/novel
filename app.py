@@ -53,8 +53,7 @@ if page == "🏠 Home":
     st.subheader("📜 Riwayat Rekomendasi")
     if st.session_state.history:
         for item in st.session_state.history[::-1]:
-            st.markdown(f"### 🔎 Rekomendasi berdasarkan: <span style='color:green'><code>{item['judul_dipilih']}</code></span>", 
-                        unsafe_allow_html=True)
+            st.markdown(f"### 🔎 Rekomendasi berdasarkan: <span style='color:green'><code>{item['judul_dipilih']}</code></span>", unsafe_allow_html=True)
             st.table(item['rekomendasi'])
     else:
         st.info("Belum ada riwayat rekomendasi. Silakan coba fitur rekomendasi di sidebar.")
@@ -90,73 +89,47 @@ elif page == "⭐ Rekomendasi Score":
         'rekomendasi': recommended[['title', 'author','type', 'genre', 'score']]
     })
 
-# ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa ------------------
+# ------------------ Rekomendasi Berdasarkan Genre & Judul Serupa (TF-IDF) ------------------
 elif page == "🎯 Rekomendasi Genre":
-    st.title("🎯 Rekomendasi Berdasarkan Genre & Judul Serupa")
-    title_input = st.text_input("✏️ Masukkan Judul Novel (boleh sebagian)")
+    st.title("🎯 Rekomendasi Berdasarkan Genre & Judul Serupa (TF-IDF)")
+    st.markdown("Masukkan judul novel, dan sistem akan menampilkan rekomendasi berdasarkan <b>genre yang sama</b> dan <b>judul yang mirip</b>, menggunakan <code>TF-IDF + Cosine Similarity</code>.", unsafe_allow_html=True)
+
+    title_input = st.text_input("✏️ Masukkan Judul Novel")
 
     if title_input:
         matched_titles = df[df['title'].str.contains(title_input, case=False, na=False)]
 
         if not matched_titles.empty:
-            selected_genre = matched_titles.iloc[0]['genre']
-            st.markdown(f"### 📌 Genre Ditemukan: <span style='color:green'><code>{selected_genre}</code></span>", unsafe_allow_html=True)
+            selected_index = matched_titles.index[0]
+            selected_title = df.loc[selected_index, 'title']
+            selected_genre = df.loc[selected_index, 'genre']
 
-            genre_novels = df[df['genre'] == selected_genre].copy()
-            X_genre = genre_novels[['score']]
-            y_genre = genre_novels['popularty']
-            model_genre = RandomForestRegressor(n_estimators=100, random_state=42)
-            model_genre.fit(X_genre, y_genre)
-            genre_novels['predicted_popularty'] = model_genre.predict(X_genre)
+            st.markdown(f"✅ Ditemukan judul: <code>{selected_title}</code> dengan genre: <code>{selected_genre}</code>", unsafe_allow_html=True)
 
-            similar_titles = genre_novels[genre_novels['title'].str.contains(title_input, case=False, na=False)]
-            if len(similar_titles) < 5:
-                additional = genre_novels[~genre_novels['title'].str.contains(title_input, case=False, na=False)]
-                similar_titles = pd.concat([similar_titles, additional]).drop_duplicates()
+            genre_novels = df[df['genre'] == selected_genre].copy().reset_index(drop=True)
+            tfidf = TfidfVectorizer(stop_words='english')
+            tfidf_matrix = tfidf.fit_transform(genre_novels['title'].fillna(''))
+            cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
 
-            recommended = similar_titles.sort_values(by='score', ascending=False).head(5)
-            r2_genre = model_genre.score(X_genre, y_genre)
-            st.markdown(f"📈 <b>Model R² Score (genre ini):</b> <code>{r2_genre:.4f}</code>", unsafe_allow_html=True)
+            selected_title_in_genre = genre_novels[genre_novels['title'].str.lower() == selected_title.lower()]
+            if not selected_title_in_genre.empty:
+                index_in_genre = selected_title_in_genre.index[0]
+                sim_scores = list(enumerate(cosine_sim[index_in_genre]))
+                sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:6]
+                top_indices = [i[0] for i in sim_scores]
 
-            st.markdown("### 📚 Rekomendasi Novel:")
-            st.dataframe(recommended[['title', 'author','type', 'genre', 'score', 'popularty', 'predicted_popularty']], use_container_width=True)
+                recommended = genre_novels.iloc[top_indices]
 
-            st.session_state.history.append({
-                'judul_dipilih': title_input,
-                'metode': 'genre + judul mirip + random_forest',
-                'rekomendasi': recommended[['title', 'author','type', 'genre', 'score']]
-            })
-        else:
-            st.warning("Judul tidak ditemukan dalam data.")
+                st.markdown("### 📚 Rekomendasi Judul Serupa Berdasarkan TF-IDF:")
+                st.dataframe(recommended[['title', 'author', 'type', 'genre', 'score', 'popularty']], use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("📖 Rekomendasi Berdasarkan Kemiripan Judul (TF-IDF)")
-
-    title_input_tfidf = st.text_input("🔍 Masukkan Judul Lengkap untuk Kemiripan Judul", key="tfidf_input")
-
-    if title_input_tfidf:
-        tfidf = TfidfVectorizer(stop_words='english')
-        tfidf_matrix = tfidf.fit_transform(df['title'].fillna(''))
-        cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-
-        # Temukan indeks dari judul yang dimasukkan
-        title_matches = df[df['title'].str.contains(title_input_tfidf, case=False, na=False)]
-
-        if not title_matches.empty:
-            index = title_matches.index[0]
-            sim_scores = list(enumerate(cosine_sim[index]))
-            sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:6]
-            sim_indices = [i[0] for i in sim_scores]
-            tfidf_recommend = df.iloc[sim_indices]
-
-            st.markdown("### 🧠 Rekomendasi Novel Berdasarkan TF-IDF:")
-            st.dataframe(tfidf_recommend[['title', 'author', 'type', 'genre', 'score', 'popularty']], use_container_width=True)
-
-            st.session_state.history.append({
-                'judul_dipilih': f'TFIDF: {title_input_tfidf}',
-                'metode': 'tfidf cosine similarity',
-                'rekomendasi': tfidf_recommend[['title', 'author','type', 'genre', 'score']]
-            })
+                st.session_state.history.append({
+                    'judul_dipilih': selected_title,
+                    'metode': 'TF-IDF cosine similarity + genre',
+                    'rekomendasi': recommended[['title', 'author', 'type', 'genre', 'score']]
+                })
+            else:
+                st.warning("Judul tidak ditemukan di daftar genre yang sama.")
         else:
             st.warning("Judul tidak ditemukan dalam data.")
 
