@@ -175,13 +175,6 @@ elif page == "Distribusi Novel":
     ax1.set_xticklabels(genre_counts.index, rotation=45, ha='right')
     st.pyplot(fig1)
 
-    if 'status' in df.columns:
-        st.markdown("### 📘 Status Penerbitan")
-        status_counts = df['status'].value_counts()
-        fig2, ax2 = plt.subplots(figsize=(6, 4))
-        ax2.pie(status_counts.values, labels=status_counts.index, autopct='%1.1f%%', colors=['#87CEFA', '#32CD32'])
-        ax2.set_title("Distribusi Status Novel")
-        st.pyplot(fig2)
 
     if 'years_start' in df.columns:
         st.markdown("### 🕰️ Tahun Mulai")
