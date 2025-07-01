@@ -166,6 +166,7 @@ elif page == "Distribusi Novel":
     st.title("📊 Distribusi Novel")
     st.markdown("Visualisasi statistik seputar genre, status, dan tahun rilis novel. 📈")
 
+    # Top 10 Genre
     st.markdown("### 🎭 Top 10 Genre")
     genre_counts = df['genre'].value_counts().head(10)
     fig1, ax1 = plt.subplots(figsize=(10, 5))
@@ -175,7 +176,17 @@ elif page == "Distribusi Novel":
     ax1.set_xticklabels(genre_counts.index, rotation=45, ha='right')
     st.pyplot(fig1)
 
+    # Distribusi Status
+    st.markdown("### 📘 Distribusi Status Novel")
+    status_counts = df['status'].value_counts()
+    fig2, ax2 = plt.subplots(figsize=(8, 5))
+    ax2.bar(status_counts.index, status_counts.values, color='#9370DB')
+    ax2.set_ylabel("Jumlah Novel")
+    ax2.set_title("Distribusi Status Novel (Completed, Ongoing, dll)")
+    ax2.set_xticklabels(status_counts.index, rotation=45, ha='right')
+    st.pyplot(fig2)
 
+    # Tahun Mulai
     if 'years_start' in df.columns:
         st.markdown("### 🕰️ Tahun Mulai")
         ys = df['years_start'].dropna().astype(int).value_counts().sort_index()
@@ -186,6 +197,7 @@ elif page == "Distribusi Novel":
         ax3.set_title("Distribusi Tahun Mulai")
         st.pyplot(fig3)
 
+    # Tahun Selesai
     if 'years_finish' in df.columns:
         st.markdown("### ⏳ Tahun Selesai")
         yf = df['years_finish'].dropna().astype(int).value_counts().sort_index()
