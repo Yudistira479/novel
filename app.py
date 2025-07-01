@@ -26,12 +26,9 @@ for col in cols_to_fill:
 
 # ------------------ Cek Duplikat ------------------
 jumlah_duplikat = df.duplicated().sum()
-st.sidebar.markdown(f"🔁 Duplikat dalam data: <code>{jumlah_duplikat}</code>", unsafe_allow_html=True)
 
 # ------------------ Ukuran DataFrame ------------------
 novel_rows, novel_cols = df.shape
-st.sidebar.markdown(f"📏 Jumlah Baris: <code>{novel_rows}</code>", unsafe_allow_html=True)
-st.sidebar.markdown(f"📀 Jumlah Kolom: <code>{novel_cols}</code>", unsafe_allow_html=True)
 
 # ------------------ Inisialisasi Session State ------------------
 if 'history' not in st.session_state:
