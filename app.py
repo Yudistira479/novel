@@ -20,12 +20,15 @@ df = load_data()
 # ------------------ Standardisasi Nama Kolom ------------------
 df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
 
-# ------------------ Preprocessing Missing Values ------------------
-df['score'] = df['score'].fillna(df['score'].mean())
-df['volume'] = df['volume'].fillna(df['volume'].median())
-df['chapter'] = df['chapter'].fillna(0)
-if 'years_finish' in df.columns:
-    df['years_finish'] = df['years_finish'].fillna(df['years_finish'].median())
+# ------------------ Isi NaN/None dengan Nilai Terdekat (Kolom Tertentu) ------------------
+cols_to_fill = ['score', 'volume', 'chapter', 'years_finish']
+for col in cols_to_fill:
+    if col in df.columns:
+        df[col] = df[col].ffill().bfill()
+
+# Tampilkan data setelah pengisian
+print("DataFrame setelah standardisasi kolom dan pengisian nilai:")
+display(df.head())
 
 # ------------------ Cek Duplikat ------------------
 jumlah_duplikat = df.duplicated().sum()
