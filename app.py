@@ -15,6 +15,26 @@ def load_data():
     return pd.read_csv('novels_selected.csv')  # gunakan path file yang diupload
 
 df = load_data()
+df = load_data()
+
+# ------------------ Standardisasi Nama Kolom ------------------
+df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+
+# ------------------ Preprocessing Missing Values ------------------
+df['score'] = df['score'].fillna(df['score'].mean())
+df['volume'] = df['volume'].fillna(df['volume'].median())
+df['chapter'] = df['chapter'].fillna(0)
+if 'years_finish' in df.columns:
+    df['years_finish'] = df['years_finish'].fillna(df['years_finish'].median())
+
+# ------------------ Cek Duplikat ------------------
+jumlah_duplikat = df.duplicated().sum()
+st.sidebar.markdown(f"🔁 Duplikat dalam data: <code>{jumlah_duplikat}</code>", unsafe_allow_html=True)
+
+# ------------------ Ukuran DataFrame ------------------
+novel_rows, novel_cols = df.shape
+st.sidebar.markdown(f"📏 Jumlah Baris: <code>{novel_rows}</code>", unsafe_allow_html=True)
+st.sidebar.markdown(f"📐 Jumlah Kolom: <code>{novel_cols}</code>", unsafe_allow_html=True)
 
 # Inisialisasi session state untuk menyimpan riwayat
 if 'history' not in st.session_state:
