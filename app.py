@@ -64,7 +64,7 @@ page = st.sidebar.radio("Pilih Halaman:", ["Home", "Rekomendasi Score", "Rekomen
 
 # ------------------ Halaman Home ------------------
 if page == "Home":
-    st.image("https://cdn-icons-png.flaticon.com/512/29/29302.png", width=100)
+
     st.title("📚 Daftar Novel Populer")
     st.markdown("Selamat datang di aplikasi rekomendasi novel! 📖✨")
 
@@ -87,7 +87,7 @@ if page == "Home":
 
 # ------------------ Halaman Rekomendasi Score ------------------
 elif page == "Rekomendasi Score":
-    st.image("https://cdn-icons-png.flaticon.com/512/2866/2866327.png", width=100)
+    
     st.title("📈 Rekomendasi Berdasarkan Score")
     st.markdown("Temukan novel yang direkomendasikan berdasarkan **skor pilihanmu** dan kemiripan judul. 🎯📘")
 
@@ -122,7 +122,7 @@ elif page == "Rekomendasi Score":
 
 # ------------------ Halaman Rekomendasi Genre ------------------
 elif page == "Rekomendasi Genre":
-    st.image("https://cdn-icons-png.flaticon.com/512/2165/2165006.png", width=100)
+    
     st.title("🎯 Rekomendasi Berdasarkan Genre & Judul")
     st.markdown("Masukkan judul novel favoritmu, dan sistem akan mencari novel sejenis berdasarkan genre dan prediksi popularitas. 🔍📖")
 
@@ -162,7 +162,7 @@ elif page == "Rekomendasi Genre":
 
 # ------------------ Halaman Distribusi ------------------
 elif page == "Distribusi Novel":
-    st.image("https://cdn-icons-png.flaticon.com/512/3502/3502458.png", width=100)
+    
     st.title("📊 Distribusi Novel")
     st.markdown("Visualisasi statistik seputar genre, status, dan tahun rilis novel. 📈")
 
