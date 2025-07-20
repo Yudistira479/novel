@@ -123,15 +123,19 @@ elif page == "Rekomendasi Score":
 # ------------------ Halaman Rekomendasi Genre ------------------
 elif page == "Rekomendasi Genre":
     
-    st.title("🎯 Rekomendasi Berdasarkan Genre")
-    st.markdown("Pilih genre favoritmu, dan sistem akan mencari novel sejenis berdasarkan genre dan prediksi popularitas. 🔍📖")
+    st.title("🎯 Rekomendasi Berdasarkan Genre (Multi-Genre)")
+    st.markdown("Pilih satu genre favorit, sistem akan mencari novel sejenis berdasarkan genre tersebut dan prediksi popularitas. 🔍📖")
 
-    # Ambil daftar genre unik dari dataset
-    unique_genres = df['genre'].dropna().unique()
-    selected_genre = st.selectbox("Pilih Genre", sorted(unique_genres))
+    # Ekstraksi genre unik dari genre yang dipisahkan koma
+    genre_split = df['genre'].dropna().apply(lambda x: [g.strip() for g in x.split(',')])
+    all_genres = sorted(set(g for sublist in genre_split for g in sublist))
+
+    selected_genre = st.selectbox("Pilih Genre", all_genres)
 
     if selected_genre:
-        genre_novels = df[df['genre'] == selected_genre].copy()
+        # Filter baris yang mengandung genre terpilih
+        genre_mask = df['genre'].apply(lambda x: selected_genre in x if pd.notnull(x) else False)
+        genre_novels = df[genre_mask].copy()
 
         if not genre_novels.empty:
             # Random Forest berdasarkan score vs popularitas
@@ -141,7 +145,7 @@ elif page == "Rekomendasi Genre":
             model_g.fit(Xg, yg)
             genre_novels['predicted_popularty'] = model_g.predict(Xg)
 
-            # TF-IDF Similarity (ambil judul tengah sebagai referensi)
+            # TF-IDF Similarity (gunakan judul pertama sebagai referensi)
             reference_title = genre_novels['title'].iloc[0]
             title_vec = tfidf_vectorizer.transform([reference_title])
             genre_idx = genre_novels.index
@@ -159,7 +163,7 @@ elif page == "Rekomendasi Genre":
 
             st.session_state.history.append({
                 'judul_dipilih': f"Genre: {selected_genre}",
-                'metode': 'genre_dropdown + tfidf + random_forest',
+                'metode': 'genre_split + tfidf + random_forest',
                 'rekomendasi': recommended[['title', 'author','type', 'genre', 'score']]
             })
         else:
