@@ -108,7 +108,7 @@ elif page == "Rekomendasi Score":
     df['tfidf_sim'] = tfidf_similarities[input_idx]
     df['combined_score'] = df['tfidf_sim'] - df['predicted_diff'] / df['predicted_diff'].max()
 
-    recommended = df.sort_values(by='combined_score', ascending=False).head(5)
+    recommended = df.sort_values(by='combined_score', ascending=False).head(10)
 
     st.markdown(f"🔎 <b>Model R² Score:</b> <code>{r2:.4f}</code>", unsafe_allow_html=True)
     st.markdown(f"📊 <b>Prediksi Popularitas untuk skor {input_score:.2f}:</b> <code>{predicted_pop:.2f}</code>", unsafe_allow_html=True)
@@ -154,7 +154,7 @@ elif page == "Rekomendasi Genre":
 
             # Gabungkan skor
             genre_novels['combined_score'] = genre_novels['tfidf_sim'] + genre_novels['predicted_popularty'] / genre_novels['predicted_popularty'].max()
-            recommended = genre_novels.sort_values(by='combined_score', ascending=False).head(5)
+            recommended = genre_novels.sort_values(by='combined_score', ascending=False).head(10)
 
             r2g = model_g.score(Xg, yg)
 
