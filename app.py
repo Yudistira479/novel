@@ -123,7 +123,7 @@ elif page == "Rekomendasi Score":
 # ------------------ Halaman Rekomendasi Genre ------------------
 elif page == "Rekomendasi Genre":
     
-    st.title("🎯 Rekomendasi Berdasarkan Genre (Multi-Genre)")
+    st.title("🎯 Rekomendasi Berdasarkan Genre ")
     st.markdown("Pilih satu genre favorit, sistem akan mencari novel sejenis berdasarkan genre tersebut dan prediksi popularitas. 🔍📖")
 
     # Ekstraksi genre unik dari genre yang dipisahkan koma
